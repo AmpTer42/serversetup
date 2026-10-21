@@ -100,6 +100,22 @@ sudo nvidia-ctk runtime configure --runtime=docker
 echo ">>> Docker: запуск сервиса..."
 sudo systemctl enable --now docker
 
+# -------------------- 6. Python ------------------------------
+echo ">>> Установка Python..."
+sudo apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    python3-dev \
+    python3-setuptools \
+    python3-wheel \
+    build-essential \
+    libssl-dev \
+    libffi-dev \
+    libsqlite3-dev \
+    libreadline-dev \
+    zlib1g-dev
+
 # -------------------- Итог --------------------
 echo
 echo "============================================================"
@@ -107,7 +123,8 @@ echo " Готово!"
 echo " Tailscale : $(command -v tailscale || echo 'не найден')"
 echo " Nushell   : $(command -v nu        || echo 'не найден')"
 echo " Docker    : $(docker --version    2>/dev/null || echo 'не найден')"
-ehco " NVIDIA CT : $(command -v nvidia-ctk || echo 'не найден')"
+echo " NVIDIA CT : $(command -v nvidia-ctk || echo 'не найден')"
+echo " Python    : $(python3 --version 2>/dev/null || echo 'не найден')"
 echo
 echo " ВАЖНО: чтобы использовать docker без sudo, выйдите из"
 echo " сессии и зайдите заново (или выполните: newgrp docker)."
