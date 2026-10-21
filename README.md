@@ -1,3 +1,2 @@
-# Template
+# The auto setup for servers
 
-Template for other projects
