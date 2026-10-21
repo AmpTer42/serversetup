@@ -69,6 +69,45 @@ sudo usermod -aG docker "${CURRENT_USER}"
 # --- ВАЖНО: сервис Docker НЕ запускаем до настройки NVIDIA ---
 
 # -------------------- 4. NVIDIA Container Toolkit ------------
+
+# ------------------------------------------------------------------
+# Проверка: есть ли NVIDIA GPU в системе и видит ли его ОС (драйвер)
+# ------------------------------------------------------------------
+check_nvidia_gpu() {
+    # 1. Железо на PCI-шине (vendor id 10de = NVIDIA)
+    if ! lspci -nn 2>/dev/null | grep -qiE '\[10de:'; then
+        echo "[check] NVIDIA GPU не найден на PCI-шине" >&2
+        return 1
+    fi
+
+    # 2. Драйвер установлен?
+    if ! command -v nvidia-smi >/dev/null 2>&1; then
+        echo "[check] nvidia-smi не найден — драйвер не установлен" >&2
+        return 1
+    fi
+
+    # 3. Драйвер может общаться с картой?
+    if ! nvidia-smi -L >/dev/null 2>&1; then
+        echo "[check] nvidia-smi не может связаться с драйвером" >&2
+        return 1
+    fi
+
+    # 4. Созданы device-узлы
+    if ! compgen -G '/dev/nvidia[0-9]*' >/dev/null; then
+        echo "[check] Нет устройств /dev/nvidia*" >&2
+        return 1
+    fi
+
+    echo "[check] NVIDIA GPU обнаружен и доступен:"
+    nvidia-smi -L | sed 's/^/    /'
+    return 0
+}
+
+# ------------------------------------------------------------------
+# Установка NVIDIA Container Toolkit
+# ------------------------------------------------------------------
+install_nvidia_container_toolkit() {
+
 echo ">>> NVIDIA: установка зависимостей..."
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
@@ -95,6 +134,13 @@ sudo apt-get install -y \
 
 echo ">>> NVIDIA: настройка Docker runtime..."
 sudo nvidia-ctk runtime configure --runtime=docker
+}
+
+if check_nvidia_gpu; then
+    install_nvidia_container_toolkit
+else
+    echo "NVIDIA: драйвер или видеокарта не обнаружены"
+fi
 
 # -------------------- 5. Запуск Docker ----------------------
 echo ">>> Docker: запуск сервиса..."
