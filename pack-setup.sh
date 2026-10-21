@@ -66,6 +66,37 @@ echo ">>> Docker: создание группы и добавление поль
 sudo groupadd -f docker
 sudo usermod -aG docker "${CURRENT_USER}"
 
+# --- ВАЖНО: сервис Docker НЕ запускаем до настройки NVIDIA ---
+
+# -------------------- 4. NVIDIA Container Toolkit ------------
+echo ">>> NVIDIA: установка зависимостей..."
+sudo apt-get update
+sudo apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    gnupg2
+
+echo ">>> NVIDIA: добавление репозитория..."
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+    | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
+    && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+    | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+    | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list >/dev/null
+
+echo ">>> NVIDIA: обновление индекса пакетов..."
+sudo apt-get update
+
+echo ">>> NVIDIA: установка пакетов..."
+sudo apt-get install -y \
+    nvidia-container-toolkit \
+    nvidia-container-toolkit-base \
+    libnvidia-container-tools \
+    libnvidia-container1
+
+echo ">>> NVIDIA: настройка Docker runtime..."
+sudo nvidia-ctk runtime configure --runtime=docker
+
+# -------------------- 5. Запуск Docker ----------------------
 echo ">>> Docker: запуск сервиса..."
 sudo systemctl enable --now docker
 
@@ -76,6 +107,7 @@ echo " Готово!"
 echo " Tailscale : $(command -v tailscale || echo 'не найден')"
 echo " Nushell   : $(command -v nu        || echo 'не найден')"
 echo " Docker    : $(docker --version    2>/dev/null || echo 'не найден')"
+ehco " NVIDIA CT : $(command -v nvidia-ctk || echo 'не найден')"
 echo
 echo " ВАЖНО: чтобы использовать docker без sudo, выйдите из"
 echo " сессии и зайдите заново (или выполните: newgrp docker)."
