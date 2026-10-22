@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: nu-check
+        name: Nushell Syntax Check
+        entry: nu --commands 'nu-check'
+        language: system
+        files: \.nu$
+        pass_filenames: true
