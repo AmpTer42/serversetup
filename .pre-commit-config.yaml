@@ -3,7 +3,7 @@ repos:
     hooks:
       - id: nu-check
         name: Nushell Syntax Check
-        entry: nu --commands 'nu-check'
+        entry: nu-lint
         language: system
         files: \.nu$
         pass_filenames: true
