@@ -4,7 +4,7 @@ let pm = [
     {
     name: apt,
     cmd:  apt-get,
-    used: false,
+    used: ((which apt-get) != []),
     pkgs: [
     nvidia-container-toolkit
     nvidia-container-toolkit-base
@@ -16,7 +16,7 @@ let pm = [
     {
     name: dnf,
     cmd:  dnf,
-    used: false,
+    used: ((which dnf) != []),
     pkgs: [
     nvidia-container-toolkit
     nvidia-container-toolkit-base
@@ -29,7 +29,7 @@ let pm = [
     {
     name: pacman,
     cmd:  pacman,
-    used: false,
+    used: ((which pacman) != []),
     pkgs: [
     nvidia-container-toolkit
     libnvidia-container-tools
@@ -40,7 +40,7 @@ let pm = [
     {
     name: zypper,
     cmd:  zypper,
-    used: false,
+    used: ((which zypper) != []),
     pkgs: [
     nvidia-container-toolkit
     nvidia-container-toolkit-base
@@ -48,12 +48,6 @@ let pm = [
     libnvidia-container1
     nvidia-utils
     ]
-    }
-    {
-    name: none,
-    cmd:  none,
-    used: true,
-    pkgs: []
     }
 ]
 
@@ -65,19 +59,9 @@ let working_cmds = (
     | get cmd
 )
 
-# 2. Обновляем used
-let pm = $pm | each {|r|
-    $r | update used (
-        if $r.name == none {
-            ($working_cmds | is-empty)   # none «работает», только если ничего не нашли
-        } else {
-            $r.cmd in $working_cmds
-        }
-    )
-}
 let pmc = ($pm | where used | get --optional name | first)
 
-if ($pmc == none or $pmc == null) {
+if ($pmc == []) {
     error make {
         msg: "no supported package manager"
         label: {
