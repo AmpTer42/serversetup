@@ -51,14 +51,6 @@ let pm = [
     }
 ]
 
-# 1. Собираем cmd, которые реально существуют в PATH
-let working_cmds = (
-    $pm
-    | where name != none
-    | where (which $it.cmd | is-not-empty)
-    | get cmd
-)
-
 let pmc = ($pm | where used | get --optional name | first)
 
 if ($pmc == []) {
