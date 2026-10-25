@@ -20,7 +20,7 @@ jobs:
         run: cargo install nu-lint --locked
 
       - name: Run nu-lint
-        run: nu-lint --format compact . > lint.txt
+        run: nu-lint --format compact --config .nu-lint.toml . > lint.txt
 
       - name: Upload lint artifact
         uses: actions/upload-artifact@v7
