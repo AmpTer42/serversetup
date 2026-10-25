@@ -61,7 +61,10 @@ export def detect-pm []: nothing -> string {
     if ($found | is-empty) {
         error make {
             msg: "no supported package manager"
-            label: { text: "needs apt-get, dnf, zypper or pacman" }
+            label: {
+                text: "needs apt-get, dnf, zypper or pacman"
+                span: (metadata $found).span
+            }
         }
     }
     $found
@@ -79,9 +82,9 @@ export def pkg-installed [pmc: string, pkg: string]: nothing -> bool {
             let r = (do { dpkg-query -W -f='${Status}' $pkg } | complete)
             ($r.exit_code == 0) and ($r.stdout =~ "install ok installed")
         }
-        "pacman" => {(do { pacman -Q $pkg } | complete).exit_code == 0}
-        "dnf"    => {(do { dnf -q list installed $pkg } | complete).exit_code == 0}
-        "zypper" => {(do { rpm -q --quiet $pkg } | complete).exit_code == 0}
+        "pacman" => { (do { pacman -Q $pkg } | complete).exit_code == 0 }
+        "dnf"    => { (do { dnf -q list installed $pkg } | complete).exit_code == 0 }
+        "zypper" => { (do { rpm -q --quiet $pkg } | complete).exit_code == 0 }
     }
 }
 
