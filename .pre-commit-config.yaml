@@ -3,7 +3,7 @@ repos:
     hooks:
       - id: nu-check
         name: Nushell Syntax Check
-        entry: nu-lint
+        entry: nu-lint --format compact --config .nu-lint.toml
         language: system
         files: \.nu$
         pass_filenames: true
