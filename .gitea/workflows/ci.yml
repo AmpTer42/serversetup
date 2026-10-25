@@ -1,1 +1,25 @@
+name: Lint Nu Scripts
+on: [push, pull_request]
 
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Rust & Cache
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Install nu-lint
+        run: cargo install nu-lint --locked
+
+      - name: Run nu-lint
+        run: nu-lint --format compact . > lint.txt
+
+      - name: Upload lint artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: lint.txt
+          path: |
+            lint.txt
