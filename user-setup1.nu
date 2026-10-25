@@ -55,6 +55,9 @@ if (($os | where used) == []) {
     }
   }
 }
+
+let used_os = $os | where used
+
 def sudocheck []: nothing -> nothing {
     try {
         sudo -v
@@ -73,10 +76,16 @@ def newuser [user: string]: nothing -> nothing {
     if ((sys users | where name == $user) != []) {
         return
     }
-    if (($os | where used | get name) != FreeBSD) {
+    if (($used_os | get --optional name.0) != FreeBSD) {
         sudocheck
         try {
             sudo -n useradd -m --shell (which nu | get path.0) -U $user
+            let passwd = (openssl rand -base64 32 | str replace --regex '[+=]' "")
+            let hash   = ($passwd | openssl passwd -6 -stdin)
+            sudo usermod -p $hash $user
+            sudo -n chage -d 0 $user
+            print "Your one-time password:"
+            print $passwd # print in Nushell as function returns nothing (it only prints in TTY), so it's safe to use
         } catch {|e|
             error make {
                 msg: $"can't add user ($user): error code ($e.details.code)"
@@ -114,7 +123,7 @@ def addtosudo [user: string]: nothing -> nothing {
         return
     }
     let groupadd = ($os | where used | get --optional group.0)
-    if (($os | where used | get name) != FreeBSD) {
+    if (($used_os | get --optional name.0) != FreeBSD) {
         sudocheck
         try {
             sudo -n usermod -aG $groupadd $user
@@ -150,7 +159,6 @@ def addtosudo [user: string]: nothing -> nothing {
     }
 }
 
-# user: string - 
 def main [
     user: string # User that must be set up
 ]: nothing -> nothing {
