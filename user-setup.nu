@@ -5,7 +5,7 @@
 # ---- helpers ---------------------------------------------------------------
 
 def is-freebsd []: nothing -> bool {
-    (^uname -s | complete | get stdout | str trim) == FreeBSD
+    return ((uname | get operating-system) == FreeBSD)
 }
 
 def sudo-rule-present [group: string]: nothing -> bool {
@@ -22,7 +22,7 @@ def sudo-rule-present [group: string]: nothing -> bool {
     } catch { false }
 }
 
-def write-sudoers-file [path: path, content: string]: any -> error {
+def write-sudoers-file [path: string, content: string]: string -> error {
     $"($content)\n" | save --force $path
     chmod 0440 $path
     chown root:root $path
