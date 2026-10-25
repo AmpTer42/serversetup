@@ -1,121 +1,167 @@
-#!/usr/bin/env -S nu --stdin
-# usage: ./add-sudo-user.nu <username> [--nopasswd]
-# requires nushell >= 0.90
+#!/usr/bin/env nu
+use std/log
 
-# ---- helpers ---------------------------------------------------------------
-
-def is-freebsd []: nothing -> bool {
-    return ((uname | get operating-system) == FreeBSD)
-}
-
-def sudo-rule-present [group: string]: nothing -> bool {
-    let needle = $"%($group) ALL="
-    let in_main = (try {
-        open --raw /etc/sudoers | str contains $needle
-    } catch { false })
-    if $in_main { return true }
-    try {
-        ls /etc/sudoers.d
-        | where type == file
-        | get name
-        | any {|f| open --raw $f =~ $needle }
-    } catch { false }
-}
-
-def write-sudoers-file [path: string, content: string]: string -> error {
-    $"($content)\n" | save --force $path
-    chmod 0440 $path
-    chown root:root $path
-    let chk = (visudo -cf $path | complete)
-    if $chk.exit_code != 0 {
-        let path_span = (metadata $path).span
+let os_info = try {
+    open /etc/os-release | lines | parse '{key}={value}' | reduce --fold {} {|it, acc| $acc | insert $it.key $it.value } | into record
+    } catch {|e|
         error make {
-            msg: $"visudo rejected ($path):\n($chk.stderr)"
+            msg: $"can't open /etc/os-release: error code ($e.details.code)"
             label: {
-                text: "this sudoers file is invalid"
-                span: $path_span
+                text: $"can't open /etc/os-release"
+                span: (metadata $e.debug).span
             }
-            help: "check the syntax of the generated sudoers content"
+            help: "Check if /etc/os-release is present on your system"
         }
     }
+
+let os = [
+  {
+      name: Debian,
+      group: sudo
+      used: (($os_info | get ID) == debian)
+  }
+  {
+      name: Arch
+      group: wheel
+      used: (($os_info | get ID_LIKE) == arch or ($os_info | get ID) == arch)
+  }
+  {
+      name: FreeBSD
+      group: wheel
+      used: (($os_info | get ID) == freebsd)
+  }
+  {
+      name: RHEL
+      group: wheel
+      used: (($os_info | get ID_LIKE) == fedora or ($os_info | get ID) == fedora or ($os_info | get ID) == rhel)
+  }
+  {
+      name: OpenSUSE
+      group: wheel
+      used: (($os_info | get ID_LIKE) == suse or ($os_info | get ID_LIKE) == "opensuse suse")
+  }
+  {
+      name: Ubuntu
+      group: sudo
+      used: (($os_info | get ID) == ubuntu)
+  }
+]
+
+if (($os | where used) == []) {
+  error make {
+    msg: $"using unsupported OS: ($os_info | get ID)"
+    label: {
+      text: $"unsupported OS: ($os_info | get ID)"
+      span: (metadata $os_info).span
+    }
+  }
 }
 
-def ensure-sudo-tooling []: any -> error {
-    if ((^which sudo   | complete | get exit_code) != 0) {
-        error make {msg: "sudo is not installed (on Arch: pacman -S sudo)"}
-    }
-    if ((^which visudo | complete | get exit_code) != 0) {
-        error make {msg: "visudo is missing (install the sudo package)"}
-    }
-    let includes_dropin = (
-        try { open --raw /etc/sudoers | str contains "@includedir /etc/sudoers.d" }
-        catch { false }
-    )
-    if not $includes_dropin {
+let used_os = $os | where used
+
+def sudocheck []: nothing -> nothing {
+    try {
+        sudo -v
+    } catch {|e|
         error make {
-    msg: "/etc/sudoers has no '@includedir /etc/sudoers.d' — drop-in files will be ignored"
-}
-    }
-}
-
-# ---- main ------------------------------------------------------------------
-
-def main [user_name: string, --nopasswd (-n)]: any -> string {
-    if not ((id -u | complete | get stdout | str trim | into int) == 0) {
-        error make {msg: "must run as root"}
-    }
-    ensure-sudo-tooling
-    if not ((id $user_name | complete | get exit_code) == 0) {
-        error make {msg: $"user ($user_name) does not exist"}
-    }
-
-    let sudo_group = (if ("/etc/debian_version" | path exists) {
-        "sudo"
-    } else if (("/etc/redhat-release" | path exists) or ("/etc/fedora-release" | path exists)) {
-        "wheel"
-    } else if ("/etc/arch-release" | path exists) {          # ← Arch
-        "wheel"
-    } else if (is-freebsd) {
-        "wheel"
-    } else {
-        let hits = (
-            try {
-                open --raw /etc/sudoers
-                | lines
-                | where $it =~ '^%[a-zA-Z0-9_-]+\s+ALL='
-            } catch { [] }
-        )
-        if ($hits | is-empty) { "" } else {
-            $hits | parse --regex '^%(?P<g>[a-zA-Z0-9_-]+)' | get g | first
+            msg: $"can't use sudo: ($e.details.code)"
+            label: {
+                text: "sudo failed"
+                span: (metadata $e.debug).span
+            }
         }
-    })
-    if ($sudo_group | is-empty) {
-        error make {msg: "cannot detect sudo group"}
     }
-    print $"detected sudo group: ($sudo_group)"
+}
 
-    if not (if (is-freebsd) {
-        (pw groupshow $sudo_group | complete | get exit_code) == 0
+def newuser [user: string]: nothing -> nothing {
+    if ((sys users | where name == $user) != []) {
+        return
+    }
+    if (($used_os | get --optional name.0) != FreeBSD) {
+        sudocheck
+        try {
+            sudo -n useradd -m --shell (which nu | get path.0) -U $user
+            let passwd = (openssl rand -base64 32)
+            let hash   = ($passwd | openssl passwd -6 -stdin)
+            sudo usermod -p $hash $user
+            sudo -n chage -d 0 $user
+            $"Your one-time password: ($passwd)" | save --raw --append /dev/tty
+        } catch {|e|
+            error make {
+                msg: $"can't add user ($user): error code ($e.details.code)"
+                label: {
+                    text: $"can't create user ($user)"
+                    span: (metadata $e.debug).span
+                }
+            }
+        }
+    } else if ((id -u) == 0) {
+        try {
+            pw useradd -n $user -m -s (which nu | get path.0)
+        } catch {|e|
+            error make {
+                msg: $"can't add user ($user): error code ($e.details.code)"
+                label: {
+                    text: $"can't create user ($user)"
+                    span: (metadata $e.debug).span
+                }
+            }
+        }
     } else {
-        (getent group $sudo_group | complete | get exit_code) == 0
-    }) {
-        if (is-freebsd) { pw groupadd $sudo_group } else { groupadd $sudo_group }
+        error make {
+            msg: "login as root and execute this script again"
+            label: {
+                text: $"can't create user ($user) without root permissions"
+                span: (metadata $user).span
+            }
+        }
     }
+}
 
-    if ($sudo_group in [sudo wheel]) and not (sudo-rule-present $sudo_group) {
-        write-sudoers-file $"/etc/sudoers.d/10-($sudo_group)" $"%($sudo_group) ALL=(ALL:ALL) ALL"
+def addtosudo [user: string]: nothing -> nothing {
+    if ((sys users | where name == $user | get groups | flatten | find ($os | where used | get group)) != []) {
+        return
     }
-
-    if (is-freebsd) {
-        pw groupmod $sudo_group -m $user_name
+    let groupadd = ($os | where used | get --optional group.0)
+    if (($used_os | get --optional name.0) != FreeBSD) {
+        sudocheck
+        try {
+            sudo -n usermod -aG $groupadd $user
+        } catch {|e|
+            error make {
+                msg: $"can't set ($groupadd) group for ($user): error code ($e.details.code)"
+                label: {
+                    text: $"can't add ($user) to ($groupadd)"
+                    span: (metadata $e.debug).span
+                }
+            }
+        }
+    } else if ((id -u) == 0) {
+        try {
+            pw groupmod $groupadd -m $user
+        } catch {|e|
+            error make {
+                msg: $"can't add ($user) to group: error code ($e.details.code)"
+                label: {
+                    text: $"can't add ($user) to ($groupadd)"
+                    span: (metadata $e.debug).span
+                }
+            }
+        }
     } else {
-        usermod -aG $sudo_group $user_name
+        error make {
+            msg: "login as root and execute this script again"
+            label: {
+                text: $"can't create user ($user) without root permissions"
+                span: (metadata $user).span
+            }
+        }
     }
+}
 
-    if $nopasswd {
-        write-sudoers-file $"/etc/sudoers.d/90-($user_name)-nopasswd" $"($user_name) ALL=(ALL:ALL) NOPASSWD: ALL"
-    }
-
-    print $"OK: ($user_name) -> group ($sudo_group)"
-    sudo -l -U $user_name
+def main [
+    user: string # User that must be set up
+]: nothing -> nothing {
+    newuser $user
+    addtosudo $user
 }
