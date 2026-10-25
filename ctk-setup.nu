@@ -4,7 +4,7 @@ let pm = [
     {
     name: apt,
     cmd:  apt-get,
-    used: ((which apt-get) != []),
+    used: (which apt-get | is-not-empty),
     pkgs: [
     nvidia-container-toolkit
     nvidia-container-toolkit-base
@@ -16,7 +16,7 @@ let pm = [
     {
     name: dnf,
     cmd:  dnf,
-    used: ((which dnf) != []),
+    used: (which dnf | is-not-empty),
     pkgs: [
     nvidia-container-toolkit
     nvidia-container-toolkit-base
@@ -29,7 +29,7 @@ let pm = [
     {
     name: pacman,
     cmd:  pacman,
-    used: ((which pacman) != []),
+    used: (which zypper | is-not-empty),
     pkgs: [
     nvidia-container-toolkit
     libnvidia-container-tools
@@ -40,7 +40,7 @@ let pm = [
     {
     name: zypper,
     cmd:  zypper,
-    used: ((which zypper) != []),
+    used: (which zypper | is-not-empty),
     pkgs: [
     nvidia-container-toolkit
     nvidia-container-toolkit-base
