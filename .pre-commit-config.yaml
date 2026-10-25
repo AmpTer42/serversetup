@@ -5,5 +5,5 @@ repos:
         name: Nushell Syntax Check
         entry: nu-lint
         language: system
-        files: \.nu$
+        files: .nu$
         pass_filenames: true
