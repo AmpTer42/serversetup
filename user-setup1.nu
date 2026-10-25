@@ -1,4 +1,5 @@
 #!/usr/bin/env nu
+use std/log
 
 let os_info = try {
     open /etc/os-release | lines | parse '{key}={value}' | reduce --fold {} {|it, acc| $acc | insert $it.key $it.value } | into record
@@ -80,12 +81,11 @@ def newuser [user: string]: nothing -> nothing {
         sudocheck
         try {
             sudo -n useradd -m --shell (which nu | get path.0) -U $user
-            let passwd = (openssl rand -base64 32 | str replace --regex '[+=]' "")
+            let passwd = (openssl rand -base64 32)
             let hash   = ($passwd | openssl passwd -6 -stdin)
             sudo usermod -p $hash $user
             sudo -n chage -d 0 $user
-            print "Your one-time password:"
-            print $passwd # print in Nushell as function returns nothing (it only prints in TTY), so it's safe to use
+            $"Your one-time password: ($passwd)" | save --raw --append /dev/tty
         } catch {|e|
             error make {
                 msg: $"can't add user ($user): error code ($e.details.code)"
