@@ -126,10 +126,10 @@ def pkg-install [pkg: string]: nothing -> nothing {
         }
     } catch {|e|
         error make {
-            msg: $"install ($pkg) failed: ($e.msg)"
+            msg: $"install ($pkg) failed: error code ($e.details.code)"
             label: {
                 text: "can't install this package"
-                span: (metadata $pkg).span
+                span: (metadata $e.debug).span
             }
         }
     }
@@ -149,7 +149,7 @@ def ctk-install []: nothing -> nothing {
                 sudo -n env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a APT_LISTCHANGES_FRONTEND=none apt-get update -y -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=60 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold
             } catch {|e|
                 error make {
-                    msg: $"gpg keys installation for nvidia-ctk failed with exit code ($e.exit_code)"
+                    msg: $"gpg keys installation for nvidia-ctk failed with exit code ($e.details.code)"
                     label: {
                         text: $"gpg keys installation failed on OS with ($pmc)"
                         span: (metadata $e.debug).span
@@ -162,7 +162,7 @@ def ctk-install []: nothing -> nothing {
                 http get --raw https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo | sudo -n tee /etc/yum.repos.d/nvidia-container-toolkit.repo
             } catch {|e|
                 error make {
-                    msg: $"nvidia-ctk repo installation failed with exit code ($e.exit_code)"
+                    msg: $"nvidia-ctk repo installation failed with exit code ($e.details.code)"
                     label: {
                         text: $"repo installation failed on OS with ($pmc)"
                         span: (metadata $e.debug).span
@@ -180,7 +180,7 @@ def ctk-install []: nothing -> nothing {
                 }
             } catch {|e|
                 error make {
-                    msg: $"nvidia-ctk repo installation failed with exit code ($e.exit_code)"
+                    msg: $"nvidia-ctk repo installation failed with exit code ($e.details.code)"
                     labels: [
                     {text: $"repo installation failed with ($pmc)", span: (metadata $pmc).span}
                     {text: $"failed to install ($zypperrepo)", span: (metadata $e.debug).span}
@@ -197,10 +197,10 @@ def ctk-install []: nothing -> nothing {
         nvidia-smi
     } catch {|e|
         error make {
-            msg: $"Can't find nvidia-smi binary: ($e.msg)"
+            msg: $"Can't find nvidia-smi binary: error code ($e.details.code)"
             label: {
                 text: $"can't configure nvidia-ctk on OS with ($pmc)"
-                span: (metadata $pmc).span
+                span: (metadata $e.debug).span
             }
             help: $"Try to install NVIDIA drivers with ($pmc)"
         }
@@ -230,11 +230,12 @@ try {
     sudo -v
 } catch {|e|
     error make {
-        msg: $"can't use sudo: error code ($e.exit_code)"
+        msg: $"can't use sudo: error code ($e.details.code)"
         label: {
-            text: ($e.msg)
+            text: "can't execute sudo -v"
             span: (metadata $e.debug).span
         }
+        help: "try to install sudo with your package manager"
     }
 }
 
