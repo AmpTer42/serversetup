@@ -1,3 +1,4 @@
 [rules]
 dangerous_file_operations = "off"
 missing_in_type = "off"
+single_call_command = "off"
