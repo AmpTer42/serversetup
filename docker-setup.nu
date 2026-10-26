@@ -2,8 +2,10 @@
 use modules/pkg.nu *
 use modules/system.nu *
 
+# import /etc/os-release contents
 let os_info = os-info
 
+# os table with used os calculation
 let os = [
     {
         name: Debian
@@ -31,6 +33,7 @@ let os = [
     }
 ]
 
+# docker packages for non-Arch distros
 let docker_std = [
     docker-ce
     docker-cli
@@ -39,14 +42,17 @@ let docker_std = [
     docker-compose-plugin
 ]
 
+# docker packages for Arch-based distros
 let docker_arch = [
     docker
     docker-compose
     docker-compose
 ]
 
-
+# calculate installed os on computer
 let used_os = ($os | where used | first)
+
+# check if it's empty
 if ($used_os | is-empty) {
     error make {
         msg: $"using unsupported OS: ($os_info | get ID)"
@@ -57,8 +63,10 @@ if ($used_os | is-empty) {
     }
 }
 
+# create a list of available package managers
 let pmc = detect-pm
 
+# add docker repo for your OS
 def docker-repo [os: string]: nothing -> nothing {
     try {
         match $os {
@@ -81,10 +89,10 @@ def docker-repo [os: string]: nothing -> nothing {
                     "Components: stable"
                     $"Architectures: (dpkg --print-architecture)"
                     $"Signed-By: ($keyrings)/docker.asc" 
-                ] | str join "\n"
+                ] | str join "\n" # parse list as string with \n between elements of original list
                 ensure-installed $pmc gpg ca-certificates
                 sudo -n install -m 0755 -d $keyrings
-                http get --raw ($url)/gpg | nsudo --sudo-flags [-n] $'save ($keyrings)/docker.asc'
+                http get --raw ($url)/gpg | nsudo --sudo-flags [-n] $'save ($keyrings)/docker.asc' # nsudo is used to provide input from pipeline
                 sudo -n chmod a+r $keyrings
                 $source | nsudo --sudo-flags [-n] 'save /etc/apt/sources.list.d/docker.sources'
                 return
@@ -133,6 +141,7 @@ def docker-repo [os: string]: nothing -> nothing {
     }
 }
 
+# the full instruction to install docker and plugins
 def main []: nothing -> nothing {
     sudocheck
     docker-repo $used_os
