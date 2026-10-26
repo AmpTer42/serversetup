@@ -1,5 +1,5 @@
 #!/usr/bin/env nu
-use pkg.nu *
+use modules/pkg.nu *
 
 let ctkpm = [
     {

@@ -25,7 +25,7 @@ def pm-table []: nothing -> table<name: string, cmd: string, used: bool> {
             used: (which zypper | is-not-empty),
         }
         {
-            name: snapd,
+            name: snap,
             cmd: snap,
             used: (which snap | is-not-empty),
         }
@@ -48,7 +48,7 @@ export def detect-pm []: nothing -> list<string> {
 }
 
 # Проверить, установлен ли пакет.
-export def pkg-installed [pmc: string, pkg: string]: nothing -> bool {
+def pkg-installed [pmc: string, pkg: string]: nothing -> bool {
     match $pmc {
         "apt" => {
             let r = (do { dpkg-query -W -f='${Status}' $pkg } | complete)
@@ -57,11 +57,21 @@ export def pkg-installed [pmc: string, pkg: string]: nothing -> bool {
         "pacman" => { (do { pacman -Q $pkg } | complete).exit_code == 0 }
         "dnf"    => { (do { dnf -q list installed $pkg } | complete).exit_code == 0 }
         "zypper" => { (do { rpm -q --quiet $pkg } | complete).exit_code == 0 }
+        "snap" => { (do { snap list $pkg } | complete).exit_code == 0 }
+        _ => {
+            error make {
+                msg: "using non-matched package manager"
+                label: {
+                    text: $"Using ($pmc)"
+                    span: (metadata $pmc).span
+                }
+            }
+        }
     }
 }
 
 # Установить один пакет.
-export def pkg-install [pmc: string, pkg: string]: nothing -> nothing {
+def pkg-install [pmc: string, pkg: string]: nothing -> nothing {
     try {
         match $pmc {
             "apt" => {
@@ -75,6 +85,13 @@ export def pkg-install [pmc: string, pkg: string]: nothing -> nothing {
             }
             "zypper" => {
                 sudo -n zypper install --non-interactive --gpg-auto-import-keys -y --auto-agree-with-licenses --download-in-advance $pkg
+            }
+            "snap" => {
+                try {
+                    sudo -n snap install $pkg
+                } catch {
+                    sudo -n snap install --classic $pkg
+                }
             }
         }
     } catch {|e|
