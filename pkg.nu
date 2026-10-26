@@ -2,61 +2,32 @@
 # Поддерживаются: apt (apt-get), dnf, pacman, zypper.
 
 # Таблица пакетов по менеджерам (внутренняя, не экспортируется).
-def pm-table []: nothing -> table<name: string, cmd: string, used: bool, ctk-pkgs: list<string>> {
+def pm-table []: nothing -> table<name: string, cmd: string, used: bool> {
     [
         {
             name: apt,
             cmd:  apt-get,
             used: (which apt-get | is-not-empty),
-            ctk-pkgs: [
-                nvidia-container-toolkit
-                nvidia-container-toolkit-base
-                libnvidia-container-tools
-                libnvidia-container1
-                nvidia-utils
-                  ]
         }
         {
             name: dnf,
             cmd:  dnf,
             used: (which dnf | is-not-empty),
-            ctk-pkgs: [
-                nvidia-container-toolkit
-                nvidia-container-toolkit-base
-                libnvidia-container-tools
-                libnvidia-container1
-                libnvidia-compute
-                nvidia-utils
-                ]
         }
         {
             name: pacman,
             cmd:  pacman,
             used: (which pacman | is-not-empty),
-            ctk-pkgs: [
-                nvidia-container-toolkit
-                libnvidia-container-tools
-                libnvidia-container
-                nvidia-utils
-                ]
         }
         {
             name: zypper,
             cmd:  zypper,
             used: (which zypper | is-not-empty),
-            ctk-pkgs: [
-                nvidia-container-toolkit
-                nvidia-container-toolkit-base
-                libnvidia-container-tools
-                libnvidia-container1
-                nvidia-utils
-                ]
         }
         {
             name: snapd,
             cmd: snap,
             used: (which snap | is-not-empty),
-            ctk-pkgs: []
         }
     ]
 }
@@ -74,15 +45,6 @@ export def detect-pm []: nothing -> list<string> {
         }
     }
     return $found
-}
-
-# Список пакетов nvidia-ctk для каждого из доступных менеджеров.
-export def ctk-pkgs [...pmc: string]: nothing -> record {
-    mut x = []
-    for i in $pmc {
-        $x ++= (pm-table | where name == $i | select name ctk-pkgs)
-    }
-    return ($x | transpose --header-row --as-record)
 }
 
 # Проверить, установлен ли пакет.
@@ -127,7 +89,7 @@ export def pkg-install [pmc: string, pkg: string]: nothing -> nothing {
 }
 
 # Установить пакеты, если их ещё нет.
-export def ensure-installed [...pmc: string, pkg: list<string>]: nothing -> nothing {
+export def ensure-installed [pmc: list<string>, ...pkg: string]: nothing -> nothing {
     for i in $pmc {
         for j in $pkg {
             if (pkg-installed $i $j) { continue } else {
