@@ -77,12 +77,12 @@ export def detect-pm []: nothing -> list<string> {
 }
 
 # Список пакетов nvidia-ctk для каждого из доступных менеджеров.
-export def ctk-pkgs [pmc: list<string>]: nothing -> record {
+export def ctk-pkgs [...pmc: string]: nothing -> record {
     mut x = []
     for i in $pmc {
         $x ++= (pm-table | where name == $i | select name ctk-pkgs)
     }
-    return ($x | transpose -rd)
+    return ($x | transpose --header-row --as-record)
 }
 
 # Проверить, установлен ли пакет.
