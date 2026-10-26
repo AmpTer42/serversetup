@@ -34,14 +34,24 @@ export def os-info []: nothing -> record {
 # Run a command or closure in an elevated shell
 export def nsudo [
     command?: string,                      # Command to execute
-    --closure(-c): closure,                # Closure to execute if not command is given
-    --sudo-flags(-s): list<string> = [],   # Flags to pass to sudo
-]: any -> any {
-    let nu_path = (which nu).0.path
-    let script = (
-        if $command != null { $'from nuon | do { ($command) }' }
-        else if $closure != null { $'from nuon | do ($closure | to nuon --serialize | from nuon)' }
-        else { error make "a command or closure must be provided" }
-    )
-    $in | to nuon | sudo ...$sudo_flags $nu_path --stdin --commands $script
+    --closure (-c) : closure,                # Closure to execute if not command is given
+    --sudo-flags (-s): list<string> = [],   # Flags to pass to sudo
+]: any -> string {
+    let nu_path = (which nu).0?.path
+    try {
+        let script = (
+            if $command != null { $'from nuon | do { ($command) }' }
+            else if $closure != null { $'from nuon | do ($closure | to nuon --serialize | from nuon)' }
+            else { error make "a command or closure must be provided" }
+        )
+        $in | to nuon | sudo ...$sudo_flags $nu_path --stdin --commands $script
+    } catch {|e|
+        error make {
+            msg: "can't execute nsudo with given command"
+            label: {
+                text: $"see script"
+                span: (metadata $command).span
+            }
+        }
+    }
 }
