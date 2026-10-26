@@ -2,6 +2,7 @@
 use modules/pkg.nu *
 use modules/system.nu *
 
+# table of package managers and their packages for nvidia-ctk
 let ctkpm = [
     {
     name: apt,
@@ -45,21 +46,22 @@ let ctkpm = [
     }
 ]
 
+# calculate list of package managers
 let pmc = detect-pm
 
+# install nvidia-ctk repo on your OS
 def ctk-repo-install [...pms: string]: nothing -> list<string> {
     mut inst = []
     for i in $pms {
         match ($i) {
             "pacman" => {
-                # nvidia-ctk и так есть в extra
+                # nvidia-ctk is already in extra repo
                 $inst ++= [pacman]
             }
             "apt" => {
                 ensure-installed [gpg] [$i]
                 try {
-                    # nu-lint-ignore dangerous_file_operations
-                    http get --raw https://nvidia.github.io/libnvidia-container/gpgkey | nsudo --sudo-flags [-n] 'gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg'
+                    http get --raw https://nvidia.github.io/libnvidia-container/gpgkey | nsudo --sudo-flags [-n] 'gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg' # used nsudo for correct pipelines
                     http get --raw https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | str replace --all 'deb https://' 'deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://' | nsudo --sudo-flags [-n] 'save /etc/apt/sources.list.d/nvidia-container-toolkit.list'
                     sudo -n env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a APT_LISTCHANGES_FRONTEND=none apt-get update -y -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=60 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold
                     $inst ++= [apt]
@@ -97,6 +99,7 @@ def ctk-repo-install [...pms: string]: nothing -> list<string> {
     }
 }
 
+# install packages from ctkpm table
 def ctk-install [...pms: string]: nothing -> nothing {
     for i in $pms {
         let utils = ($ctkpm | where name == $i | get --optional pkgs | first)
@@ -104,6 +107,7 @@ def ctk-install [...pms: string]: nothing -> nothing {
     }
 }
 
+# configure nvidia-ctk
 def ctk-config []: nothing -> nothing {
     try {
         nvidia-smi
@@ -132,10 +136,12 @@ def ctk-config []: nothing -> nothing {
     }
 }
 
-sudocheck
-
-let packages = [ca-certificates]
-ensure-installed $pmc ...$packages
-let cpm = ctk-repo-install ...$pmc
-ctk-install ...$cpm
-ctk-config
+# whole instruction
+def main []: nothing -> nothing {
+    sudocheck
+    let packages = [ca-certificates]
+    ensure-installed $pmc ...$packages
+    let cpm = ctk-repo-install ...$pmc
+    ctk-install ...$cpm
+    ctk-config
+}

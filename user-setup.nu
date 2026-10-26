@@ -2,8 +2,10 @@
 use std/log *
 use modules/system.nu *
 
+# parse /etc/os-release
 let os_info = os-info
 
+# table of supported OSes
 let os = [
   {
       name: Debian,
@@ -37,8 +39,10 @@ let os = [
   }
 ]
 
-let used_os = $os | where used
+# calculate installed OS
+let used_os = $os | where used | first
 
+# check if user is using unsupported OS
 if ($used_os | is-empty) {
   error make {
     msg: $"using unsupported OS: ($os_info | get ID)"
@@ -49,6 +53,7 @@ if ($used_os | is-empty) {
   }
 }
 
+# create new user if they weren't already created
 def newuser [user: string]: nothing -> nothing {
     if ((sys users | where name == $user) != []) {
         return
@@ -94,6 +99,7 @@ def newuser [user: string]: nothing -> nothing {
     }
 }
 
+# add existing user to sudo if they weren't already added
 def addtosudo [user: string]: nothing -> nothing {
     if ((sys users | where name == $user | get groups | flatten | find ($os | where used | get group)) != []) {
         return
@@ -135,6 +141,7 @@ def addtosudo [user: string]: nothing -> nothing {
     }
 }
 
+# setup user
 def main [
     user: string # User that must be set up
 ]: nothing -> nothing {

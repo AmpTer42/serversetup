@@ -1,4 +1,4 @@
-# pkg.nu — generic package-manager helpers.
+# pkg.nu - generic package-manager helpers.
 # Supports: apt (apt-get), dnf, pacman, zypper, snap.
 
 # Package managers table
