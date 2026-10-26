@@ -2,13 +2,13 @@
 # Поддерживаются: apt (apt-get), dnf, pacman, zypper.
 
 # Таблица пакетов по менеджерам (внутренняя, не экспортируется).
-def pm-table []: nothing -> table<name: string, cmd: string, used: bool, pkgs: list<string>> {
+def pm-table []: nothing -> table<name: string, cmd: string, used: bool, ctk-pkgs: list<string>> {
     [
         {
             name: apt,
             cmd:  apt-get,
             used: (which apt-get | is-not-empty),
-            pkgs: [
+            ctk-pkgs: [
                 nvidia-container-toolkit
                 nvidia-container-toolkit-base
                 libnvidia-container-tools
@@ -20,7 +20,7 @@ def pm-table []: nothing -> table<name: string, cmd: string, used: bool, pkgs: l
             name: dnf,
             cmd:  dnf,
             used: (which dnf | is-not-empty),
-            pkgs: [
+            ctk-pkgs: [
                 nvidia-container-toolkit
                 nvidia-container-toolkit-base
                 libnvidia-container-tools
@@ -33,7 +33,7 @@ def pm-table []: nothing -> table<name: string, cmd: string, used: bool, pkgs: l
             name: pacman,
             cmd:  pacman,
             used: (which pacman | is-not-empty),
-            pkgs: [
+            ctk-pkgs: [
                 nvidia-container-toolkit
                 libnvidia-container-tools
                 libnvidia-container
@@ -44,7 +44,7 @@ def pm-table []: nothing -> table<name: string, cmd: string, used: bool, pkgs: l
             name: zypper,
             cmd:  zypper,
             used: (which zypper | is-not-empty),
-            pkgs: [
+            ctk-pkgs: [
                 nvidia-container-toolkit
                 nvidia-container-toolkit-base
                 libnvidia-container-tools
@@ -56,14 +56,14 @@ def pm-table []: nothing -> table<name: string, cmd: string, used: bool, pkgs: l
             name: snapd,
             cmd: snap,
             used: (which snap | is-not-empty),
-            pkgs: []
+            ctk-pkgs: []
         }
     ]
 }
 
-# Определить первый доступный менеджер пакетов.
-export def detect-pm []: nothing -> string {
-    let found = (pm-table | where used | get --optional name | first)
+# Определить доступные  менеджеры пакетов.
+export def detect-pm []: nothing -> list<string> {
+    let found = (pm-table | where used | get name)
     if ($found | is-empty) {
         error make {
             msg: "no supported package manager"
@@ -73,12 +73,16 @@ export def detect-pm []: nothing -> string {
             }
         }
     }
-    $found
+    return $found
 }
 
-# Список пакетов проекта для конкретного менеджера.
-export def pm-pkgs [pmc: string]: nothing -> list<string> {
-    pm-table | where name == $pmc | get --optional pkgs | first
+# Список пакетов nvidia-ctk для каждого из доступных менеджеров.
+export def ctk-pkgs [pmc: list<string>]: nothing -> record {
+    mut x = []
+    for i in $pmc {
+        $x ++= (pm-table | where name == $i | select name ctk-pkgs)
+    }
+    return ($x | transpose -rd)
 }
 
 # Проверить, установлен ли пакет.
