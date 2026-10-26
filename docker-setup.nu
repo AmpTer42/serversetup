@@ -118,7 +118,7 @@ def docker-repo [os: string]: nothing -> nothing {
                 return
             }
             "Arch" => {
-                # Docker и так есть в extra репозитории
+                # Docker already exists in extra repo
                 return
             }
         }
