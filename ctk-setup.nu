@@ -1,5 +1,6 @@
 #!/usr/bin/env nu
 use modules/pkg.nu *
+use modules/system.nu *
 
 let ctkpm = [
     {
@@ -58,15 +59,15 @@ def ctk-repo-install [...pms: string]: nothing -> list<string> {
                 ensure-installed [gpg] [$i]
                 try {
                     # nu-lint-ignore dangerous_file_operations
-                    http get --raw https://nvidia.github.io/libnvidia-container/gpgkey | sudo -n gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-                    http get --raw https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | str replace --all 'deb https://' 'deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://' | sudo -n tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+                    http get --raw https://nvidia.github.io/libnvidia-container/gpgkey | nsudo --sudo-flags [-n] 'gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg'
+                    http get --raw https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | str replace --all 'deb https://' 'deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://' | nsudo --sudo-flags [-n] 'save /etc/apt/sources.list.d/nvidia-container-toolkit.list'
                     sudo -n env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a APT_LISTCHANGES_FRONTEND=none apt-get update -y -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=60 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold
                     $inst ++= [apt]
                 }
             }
             "dnf" => {
                 try {
-                    http get --raw https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo | sudo -n tee /etc/yum.repos.d/nvidia-container-toolkit.repo
+                    http get --raw https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo | nsudo --sudo-flags [-n] 'save /etc/yum.repos.d/nvidia-container-toolkit.repo'
                     $inst ++= [dnf]
                 }
             }
@@ -131,18 +132,7 @@ def ctk-config []: nothing -> nothing {
     }
 }
 
-try {
-    sudo -v
-} catch {|e|
-    error make {
-        msg: $"can't use sudo: error code ($e.details.code)"
-        label: {
-            text: "can't execute sudo -v"
-            span: (metadata $e.debug).span
-        }
-        help: "try to install sudo with your package manager"
-    }
-}
+sudocheck
 
 let packages = [ca-certificates]
 ensure-installed $pmc ...$packages

@@ -1,0 +1,144 @@
+#!/usr/bin/env nu
+use modules/pkg.nu *
+use modules/system.nu *
+
+let os_info = os-info
+
+let os = [
+    {
+        name: Debian
+        used: (($os_info | get ID) == debian)
+    }
+    {
+        name: Arch
+        used: (($os_info | get ID_LIKE) == arch or ($os_info | get ID) == arch)
+    }
+    {
+        name: RHEL
+        used: (($os_info | get ID) == rhel)
+    }
+    {
+        name: Fedora
+        used: (($os_info | get ID) == fedora)
+    }
+    {
+        name: OpenSUSE
+        used: (($os_info | get ID_LIKE) == suse or ($os_info | get ID_LIKE) == "opensuse suse")
+    }
+    {
+        name: Ubuntu
+        used: (($os_info | get ID) == ubuntu)
+    }
+]
+
+let docker_std = [
+    docker-ce
+    docker-cli
+    containerd.io
+    docker-buildx-plugin
+    docker-compose-plugin
+]
+
+let docker_arch = [
+    docker
+    docker-compose
+    docker-compose
+]
+
+
+let used_os = ($os | where used | first)
+if ($used_os | is-empty) {
+    error make {
+        msg: $"using unsupported OS: ($os_info | get ID)"
+        label: {
+            text: $"unsupported OS: ($os_info | get ID)"
+            span: (metadata $os_info).span
+        }
+    }
+}
+
+let pmc = detect-pm
+
+def docker-repo [os: string]: nothing -> nothing {
+    try {
+        match $os {
+            "OpenSUSE" => {
+                let url = https://download.docker.com/linux/sles/docker-ce.repo
+                let currentrepos = (zypper --xmlout lr -u =~ $url)
+                if (not $currentrepos) {
+                    sudo -n zypper --quiet addrepo -f $url
+                    sudo -n zypper --gpg-auto-import-keys refresh
+                }
+                return
+            }
+            "Debian" => {
+                let url = https://download.docker.com/linux/debian
+                let keyrings = "/etc/apt/keyrings"
+                let source = [
+                    "Types: deb"
+                    $"URIs: ($url)"
+                    $"Suites: (os-info | get --optional VERSION_CODENAME)"
+                    "Components: stable"
+                    $"Architectures: (dpkg --print-architecture)"
+                    $"Signed-By: ($keyrings)/docker.asc" 
+                ] | str join "\n"
+                ensure-installed $pmc gpg ca-certificates
+                sudo -n install -m 0755 -d $keyrings
+                http get --raw ($url)/gpg | nsudo --sudo-flags [-n] $'save ($keyrings)/docker.asc'
+                sudo -n chmod a+r $keyrings
+                $source | nsudo --sudo-flags [-n] 'save /etc/apt/sources/list.d/docker.sources'
+                return
+            }
+            "Ubuntu" => {
+                let url = https://download.docker.com/linux/ubuntu
+                let keyrings = "/etc/apt/keyrings"
+                let source = [
+                    "Types: deb"
+                    $"URIs: ($url)"
+                    $"Suites: (os-info | get --optional UBUNTU_CODENAME | default (os-info | get --optional VERSION_CODENAME))"
+                    "Components: stable"
+                    $"Architectures: (dpkg --print-architecture)"
+                    $"Signed-By: ($keyrings)/docker.asc" 
+                ] | str join "\n"
+                ensure-installed $pmc gpg ca-certificates
+                sudo -n install -m 0755 $keyrings
+                http get --raw https://download.docker.com/linux/ubuntu/gpg | nsudo --sudo-flags [-n] 'save ($keyrings)/docker.asc'
+                sudo -n chmod a+r ($keyrings)/docker.asc
+                sudo -n cp docker.sources /etc/apt/sources.list.d/
+                $source | nsudo --sudo-flags [-n] 'save /etc/apt/sources/list.d/docker.sources'
+                return
+            }
+            "Fedora" => {
+                sudo -n dnf config-manager addrepo --from-profile https://download.docker.com/linux/fedora/docker-ce.repo
+                return
+            }
+            "RHEL" => {
+                ensure-installed $pmc dnf-plugins-core
+                sudo -n dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
+                return
+            }
+            "Arch" => {
+                # Docker и так есть в extra репозитории
+                return
+            }
+        }
+    } catch {|e|
+        error make {
+            msg: $"can't set up docker repo on your OS: ($os)"
+            label: {
+                text: $"failed to set up docker repo: ($e.details.code)"
+                span: (metadata $e.debug).span
+            }
+        }
+    }
+}
+
+def main []: nothing -> nothing {
+    sudocheck
+    docker-repo $used_os
+    if ($used_os != Arch) {
+        ensure-installed $pmc ...$docker_std
+   } else {
+        ensure-installed $pmc ...$docker_arch
+    }
+}

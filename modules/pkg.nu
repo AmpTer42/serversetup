@@ -1,7 +1,7 @@
 # pkg.nu — generic package-manager helpers.
-# Поддерживаются: apt (apt-get), dnf, pacman, zypper.
+# Supports: apt (apt-get), dnf, pacman, zypper, snap.
 
-# Таблица пакетов по менеджерам (внутренняя, не экспортируется).
+# Package managers table
 def pm-table []: nothing -> table<name: string, cmd: string, used: bool> {
     [
         {
@@ -32,7 +32,7 @@ def pm-table []: nothing -> table<name: string, cmd: string, used: bool> {
     ]
 }
 
-# Определить доступные  менеджеры пакетов.
+# Select available package managers
 export def detect-pm []: nothing -> list<string> {
     let found = (pm-table | where used | get name)
     if ($found | is-empty) {
@@ -47,7 +47,7 @@ export def detect-pm []: nothing -> list<string> {
     return $found
 }
 
-# Проверить, установлен ли пакет.
+# Check if the package is already installed
 def pkg-installed [pmc: string, pkg: string]: nothing -> bool {
     match $pmc {
         "apt" => {
@@ -70,7 +70,7 @@ def pkg-installed [pmc: string, pkg: string]: nothing -> bool {
     }
 }
 
-# Установить один пакет.
+# Install one package
 def pkg-install [pmc: string, pkg: string]: nothing -> nothing {
     try {
         match $pmc {
@@ -105,7 +105,7 @@ def pkg-install [pmc: string, pkg: string]: nothing -> nothing {
     }
 }
 
-# Установить пакеты, если их ещё нет.
+# Install packages if they aren't already installed
 export def ensure-installed [pmc: list<string>, ...pkg: string]: nothing -> nothing {
     for i in $pmc {
         for j in $pkg {

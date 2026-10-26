@@ -1,18 +1,8 @@
 #!/usr/bin/env nu
-use std/log
+use std/log *
+use modules/system.nu *
 
-let os_info = try {
-    open /etc/os-release | lines | parse '{key}={value}' | reduce --fold {} {|it, acc| $acc | insert $it.key $it.value } | into record
-    } catch {|e|
-        error make {
-            msg: $"can't open /etc/os-release: error code ($e.details.code)"
-            label: {
-                text: $"can't open /etc/os-release"
-                span: (metadata $e.debug).span
-            }
-            help: "Check if /etc/os-release is present on your system"
-        }
-    }
+let os_info = os-info
 
 let os = [
   {
@@ -47,7 +37,9 @@ let os = [
   }
 ]
 
-if (($os | where used) == []) {
+let used_os = $os | where used
+
+if ($used_os | is-empty) {
   error make {
     msg: $"using unsupported OS: ($os_info | get ID)"
     label: {
@@ -55,22 +47,6 @@ if (($os | where used) == []) {
       span: (metadata $os_info).span
     }
   }
-}
-
-let used_os = $os | where used
-
-def sudocheck []: nothing -> nothing {
-    try {
-        sudo -v
-    } catch {|e|
-        error make {
-            msg: $"can't use sudo: ($e.details.code)"
-            label: {
-                text: "sudo failed"
-                span: (metadata $e.debug).span
-            }
-        }
-    }
 }
 
 def newuser [user: string]: nothing -> nothing {
@@ -162,6 +138,7 @@ def addtosudo [user: string]: nothing -> nothing {
 def main [
     user: string # User that must be set up
 ]: nothing -> nothing {
+    sudocheck
     newuser $user
     addtosudo $user
 }
