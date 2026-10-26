@@ -126,8 +126,13 @@ export def pkg-install [pmc: string, pkg: string]: nothing -> nothing {
     }
 }
 
-# Установить пакет, если его ещё нет.
-export def ensure-installed [pmc: string, pkg: string]: nothing -> nothing {
-    if (pkg-installed $pmc $pkg) { return }
-    pkg-install $pmc $pkg
+# Установить пакеты, если их ещё нет.
+export def ensure-installed [...pmc: string, pkg: list<string>]: nothing -> nothing {
+    for i in $pmc {
+        for j in $pkg {
+            if (pkg-installed $i $j) { continue } else {
+                pkg-install $i $j
+            }
+        }
+    }
 }
