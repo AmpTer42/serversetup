@@ -86,7 +86,7 @@ def docker-repo [os: string]: nothing -> nothing {
                 sudo -n install -m 0755 -d $keyrings
                 http get --raw ($url)/gpg | nsudo --sudo-flags [-n] $'save ($keyrings)/docker.asc'
                 sudo -n chmod a+r $keyrings
-                $source | nsudo --sudo-flags [-n] 'save /etc/apt/sources/list.d/docker.sources'
+                $source | nsudo --sudo-flags [-n] 'save /etc/apt/sources.list.d/docker.sources'
                 return
             }
             "Ubuntu" => {
@@ -105,7 +105,7 @@ def docker-repo [os: string]: nothing -> nothing {
                 http get --raw https://download.docker.com/linux/ubuntu/gpg | nsudo --sudo-flags [-n] 'save ($keyrings)/docker.asc'
                 sudo -n chmod a+r ($keyrings)/docker.asc
                 sudo -n cp docker.sources /etc/apt/sources.list.d/
-                $source | nsudo --sudo-flags [-n] 'save /etc/apt/sources/list.d/docker.sources'
+                $source | nsudo --sudo-flags [-n] 'save /etc/apt/sources.list.d/docker.sources'
                 return
             }
             "Fedora" => {
@@ -124,7 +124,7 @@ def docker-repo [os: string]: nothing -> nothing {
         }
     } catch {|e|
         error make {
-            msg: $"can't set up docker repo on your OS: ($os)"
+            msg: $"can't set up docker repo on your OS: ($used_os)"
             label: {
                 text: $"failed to set up docker repo: ($e.details.code)"
                 span: (metadata $e.debug).span
