@@ -5,52 +5,58 @@
 def pm-table []: nothing -> table<name: string, cmd: string, used: bool, pkgs: list<string>> {
     [
         {
-        name: apt,
-        cmd:  apt-get,
-        used: (which apt-get | is-not-empty),
-        pkgs: [
-            nvidia-container-toolkit
-            nvidia-container-toolkit-base
-            libnvidia-container-tools
-            libnvidia-container1
-            nvidia-utils
-              ]
+            name: apt,
+            cmd:  apt-get,
+            used: (which apt-get | is-not-empty),
+            pkgs: [
+                nvidia-container-toolkit
+                nvidia-container-toolkit-base
+                libnvidia-container-tools
+                libnvidia-container1
+                nvidia-utils
+                  ]
         }
         {
-        name: dnf,
-        cmd:  dnf,
-        used: (which dnf | is-not-empty),
-        pkgs: [
-            nvidia-container-toolkit
-            nvidia-container-toolkit-base
-            libnvidia-container-tools
-            libnvidia-container1
-            libnvidia-compute
-            nvidia-utils
-            ]
+            name: dnf,
+            cmd:  dnf,
+            used: (which dnf | is-not-empty),
+            pkgs: [
+                nvidia-container-toolkit
+                nvidia-container-toolkit-base
+                libnvidia-container-tools
+                libnvidia-container1
+                libnvidia-compute
+                nvidia-utils
+                ]
         }
         {
-        name: pacman,
-        cmd:  pacman,
-        used: (which pacman | is-not-empty),
-        pkgs: [
-            nvidia-container-toolkit
-            libnvidia-container-tools
-            libnvidia-container
-            nvidia-utils
-            ]
+            name: pacman,
+            cmd:  pacman,
+            used: (which pacman | is-not-empty),
+            pkgs: [
+                nvidia-container-toolkit
+                libnvidia-container-tools
+                libnvidia-container
+                nvidia-utils
+                ]
         }
         {
-        name: zypper,
-        cmd:  zypper,
-        used: (which zypper | is-not-empty),
-        pkgs: [
-            nvidia-container-toolkit
-            nvidia-container-toolkit-base
-            libnvidia-container-tools
-            libnvidia-container1
-            nvidia-utils
-            ]
+            name: zypper,
+            cmd:  zypper,
+            used: (which zypper | is-not-empty),
+            pkgs: [
+                nvidia-container-toolkit
+                nvidia-container-toolkit-base
+                libnvidia-container-tools
+                libnvidia-container1
+                nvidia-utils
+                ]
+        }
+        {
+            name: snapd,
+            cmd: snap,
+            used: (which snap | is-not-empty),
+            pkgs: []
         }
     ]
 }
