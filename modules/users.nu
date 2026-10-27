@@ -52,15 +52,15 @@ def used-os []: nothing -> table<name: string, used: bool> {
 
 # create user(s)
 export def newusers [...users: string]: nothing -> nothing {
-    let usertable = ($users | wrap user | insert created false | sort-by user)
+    let usertable = ($users | wrap user | insert create true | sort-by user)
     mut usertable2 = $usertable
     for i in ($usertable | get user) {
         if (sys users | where name == $i | is-empty) {
-            $usertable2 = ($usertable | where user == $i | update created true | prepend ($usertable2 | where user != $i))
+            $usertable2 = ($usertable | where user == $i | update create true | prepend ($usertable2 | where user != $i))
         }
     }
     $usertable2 = $usertable2 | sort-by user
-    let new_users = ($usertable2 | where (not (created)) | get user)
+    let new_users = ($usertable2 | where create | get user)
     if ($new_users | is-empty) { return }
     let cuser = (do { id -u } | complete)
     if ((used-os | get --optional name) != FreeBSD) {
@@ -107,6 +107,44 @@ export def newusers [...users: string]: nothing -> nothing {
     }
 }
 
+# добавить одного пользователя в одну группу через переданный adder
+def add-to-group [
+    adder: closure
+]: record<user: string, group: string, msg: string> -> nothing {
+    let target = $in
+    try {
+        do $adder $target.user $target.group
+    } catch {|e|
+        error make {
+            msg: $target.msg
+            label: {
+                text: $"failed to add user to group with error code: ($e.details.code)"
+                span: (metadata $e.debug).span
+            }
+        }
+    }
+}
+
+# общий цикл: проверить пользователя, получить его группы,
+# добавить во все отсутствующие через OS-специфичный adder
+def process-users [
+    spec: record<users: list<string>, groups: list<string>, adder: closure, notfound_msg: closure, add_msg: closure>
+]: table<name: string, id: int, groups: list<string>> -> nothing {
+    let userdata = $in
+    for u in $spec.users {
+        let matches = ($userdata | where name == $u)
+        if ($matches | is-empty) {
+            error make (do $spec.notfound_msg $u)
+        }
+        let ug = ($matches | get groups | flatten)
+        for g in $spec.groups {
+            if ($g not-in $ug) {
+                {user: $u, group: $g, msg: (do $spec.add_msg $u $g)} | add-to-group $spec.adder
+            }
+        }
+    }
+}
+
 # add user(s) to group(s)
 export def abgroupmod [
     users: list<string> # list of users to add to groups
@@ -115,49 +153,25 @@ export def abgroupmod [
     let userdata = (sys users | sort-by id | where name != nobody | where id >= 1000)
     let cuser = (do { id -u } | complete)
     if ((used-os | get --optional name) != FreeBSD) {
-        for u in $users {
-            if ($userdata | where name == $u | is-empty) {
-                error make $"can't find user ($u)"
+        $userdata | process-users {
+            users: $users
+            groups: $groups
+            adder: {|u, g|
+                sudo -n groupadd --force $g
+                sudo -n usermod --append --groups $g $u
             }
-            let usergroups = ($userdata | where name == $u | get groups | flatten)
-            for g in $groups {
-                if ($g not-in $usergroups) {
-                    try {
-                        sudo -n groupadd --force $g
-                        sudo -n usermod --append --groups $g $u
-                    } catch {|e|
-                        error make {
-                            msg: $"can't add ($u) to ($g)"
-                            label: {
-                                text: $"failed to add user to group with error code: ($e.details.code)"
-                                span: (metadata $e.debug).span
-                            }
-                        }
-                    }
-                }
-            }
+            notfound_msg: {|u| $"can't find user ($u)" }
+            add_msg: {|u, g| $"can't add ($u) to ($g)" }
         }
     } else if ($cuser.stdout == 0 and $cuser.stderr == 0) {
-        for u in $users {
-            if ($userdata | where name == $u | is-empty) {
-                error make $"can't find user($u)"
+        $userdata | process-users {
+            users: $users
+            groups: $groups
+            adder: {|u, g|
+                pw groupmod $g -m $u
             }
-            let usergroups = ($userdata | where name == $u | get groups | flatten)
-            for g in $groups {
-                if ($g not-in $usergroups) {
-                    try {
-                        pw groupmod $g -m $u
-                    } catch {|e|
-                        error make {
-                            msg: $"can't add user ($u) to ($g)"
-                            label: {
-                                text: $"failed to add user to group with error code: ($e.details.code)"
-                                span: (metadata $e.debug).span
-                            }
-                        }
-                    }
-                }
-            }
+            notfound_msg: {|u| $"can't find user($u)" }
+            add_msg: {|u, g| $"can't add user ($u) to ($g)" }
         }
     } else {
         error make {
