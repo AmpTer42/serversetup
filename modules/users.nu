@@ -32,7 +32,7 @@ def os []: nothing -> table<name: string, used: bool> {
     ]
 }
 
-def used_os []: nothing -> table<name: string, used: bool> {
+def used-os []: nothing -> table<name: string, used: bool> {
     let used_os = (os | where used | first)
     if ($used_os | is-empty) {
         error make {
@@ -51,19 +51,16 @@ export def newusers [...users: string]: nothing -> nothing {
     let usertable = ($users | wrap user | insert created false | sort-by user)
     mut usertable2 = $usertable
     for i in ($usertable | get user) {
-        let r = (do {id $i} | complete)
-        if $r.exit_code == 0 {
-          $usertable2 = ($usertable | where user == $i | update created true | prepend ($usertable2 | where user != $i))
+        if (sys users | where name == $i | is-empty) {
+            $usertable2 = ($usertable | where user == $i | update created true | prepend ($usertable2 | where user != $i))
         }
     }
     $usertable2 = $usertable2 | sort-by user
-    let new_users = ($usertable2 | where created == false | get user)
-    if ($new_users | is-empty) {
-      return
-    }
-    let cuser = (do {id -u} | complete)
+    let new_users = ($usertable2 | where (not (created)) | get user)
+    if ($new_users | is-empty) { return }
+    let cuser = (do { id -u } | complete)
     for user in $new_users {
-      if ((used_os | get --optional name) != FreeBSD) {
+      if ((used-os | get --optional name) != FreeBSD) {
           sudocheck
           try {
               sudo -n useradd -m --shell (which nu | get path.0) -U $user
@@ -81,7 +78,7 @@ export def newusers [...users: string]: nothing -> nothing {
                   }
               }
           }
-      } else if (cuser.stdout == 0 and cuser.exit_code == 0) {
+      } else if ($cuser.stdout == 0 and $cuser.exit_code == 0) {
           try {
               pw useradd -n $user -m -s (which nu | get path.0)
           } catch {|e|
@@ -94,16 +91,26 @@ export def newusers [...users: string]: nothing -> nothing {
               }
           }
       } else {
-          error make {
-              msg: "login as root and execute this script again"
-              label: {
-                  text: $"can't create user ($user) without root permissions"
-                  span: (metadata $user).span
-              }
-          }
-      }
+            error make {
+                msg: "login as root and execute this script again"
+                label: {
+                    text: $"can't create user ($user) without root permissions"
+                    span: (metadata $user).span
+                }
+            }
+        }
     }
 }
 
-# add user to groups
-
+# add user(s) to groups
+export def bgroupmod [
+    users: list<string> 
+    ...groups: string   
+    ]: nothing -> nothing {
+    let userdata = (sys users)
+    for u in $users {
+        if ($userdata | where name == $u | is-empty) {
+            error make $"can't find user ($u)"
+        }
+    }
+}
