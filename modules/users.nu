@@ -1,7 +1,10 @@
 # users.nu - create and configure users and their groups
+
+# Add submodules functions as functions from this module
 export use ./system.nu *
 
 
+# table of OSes
 def os []: nothing -> table<name: string, used: bool> {
     let os_info = os-info
     [
@@ -32,6 +35,7 @@ def os []: nothing -> table<name: string, used: bool> {
     ]
 }
 
+# get OS info
 def used-os []: nothing -> table<name: string, used: bool> {
     let used_os = (os | where used | first)
     if ($used_os | is-empty) {
@@ -60,37 +64,36 @@ export def newusers [...users: string]: nothing -> nothing {
     if ($new_users | is-empty) { return }
     let cuser = (do { id -u } | complete)
     for user in $new_users {
-      if ((used-os | get --optional name) != FreeBSD) {
-          sudocheck
-          try {
-              sudo -n useradd -m --shell (which nu | get path.0) -U $user
-              let passwd = (openssl rand -base64 32)
-              let hash   = ($passwd | openssl passwd -6 -stdin)
-              sudo -n usermod -p $hash $user
-              sudo -n chage -d 0 $user
-              $"($user) one-time password: ($passwd)\n" | save --raw --append /dev/tty
-          } catch {|e|
-              error make {
-                  msg: $"can't add user ($user): error code ($e.details.code)"
-                  label: {
-                      text: $"can't create user ($user)"
-                      span: (metadata $e.debug).span
-                  }
-              }
-          }
-      } else if ($cuser.stdout == 0 and $cuser.exit_code == 0) {
-          try {
-              pw useradd -n $user -m -s (which nu | get path.0)
-          } catch {|e|
-              error make {
-                  msg: $"can't add user ($user): error code ($e.details.code)"
-                  label: {
-                      text: $"can't create user ($user)"
-                      span: (metadata $e.debug).span
-                  }
-              }
-          }
-      } else {
+        if ((used-os | get --optional name) != FreeBSD) {
+            try {
+                sudo -n useradd -m --shell (which nu | get path.0) -U $user
+                let passwd = (openssl rand -base64 32)
+                let hash   = ($passwd | openssl passwd -6 -stdin)
+                sudo -n usermod -p $hash $user
+                sudo -n chage -d 0 $user
+                $"($user) one-time password: ($passwd)\n" | save --raw --append /dev/tty
+            } catch {|e|
+                error make {
+                    msg: $"can't add user ($user): error code ($e.details.code)"
+                    label: {
+                        text: $"can't create user ($user)"
+                        span: (metadata $e.debug).span
+                    }
+                }
+            }
+        } else if ($cuser.stdout == 0 and $cuser.exit_code == 0) {
+            try {
+                pw useradd -n $user -m -s (which nu | get path.0)
+            } catch {|e|
+                error make {
+                    msg: $"can't add user ($user): error code ($e.details.code)"
+                    label: {
+                        text: $"can't create user ($user)"
+                        span: (metadata $e.debug).span
+                    }
+                }
+            }
+        } else {
             error make {
                 msg: "login as root and execute this script again"
                 label: {
@@ -102,15 +105,64 @@ export def newusers [...users: string]: nothing -> nothing {
     }
 }
 
-# add user(s) to groups
-export def bgroupmod [
-    users: list<string> 
-    ...groups: string   
+# add user(s) to group(s)
+export def abgroupmod [
+    users: list<string> # list of users to add to groups
+    ...groups: string   # list of groups
     ]: nothing -> nothing {
-    let userdata = (sys users)
-    for u in $users {
-        if ($userdata | where name == $u | is-empty) {
-            error make $"can't find user ($u)"
+    let userdata = (sys users | sort-by id | where name != nobody | where id >= 1000)
+    let cuser = (do { id -u } | complete)
+    if ((used-os | get --optional name) != FreeBSD) {
+        for u in $users {
+            if ($userdata | where name == $u | is-empty) {
+                error make $"can't find user ($u)"
+            }
+            let $usergroups = ($userdata | where name == $u | get groups | flatten)
+            for g in $groups {
+                if ($g not-in $usergroups) {
+                    try {
+                        sudo -n groupadd --force $g
+                        sudo -n usermod --append --groups $g $u
+                    } catch {|e|
+                        error make {
+                            msg: $"can't add ($u) to ($g)"
+                            label: {
+                                text: $"failed to add user to group with error code: ($e.details.code)"
+                                span: (metadata $e.debug).span
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else if ($cuser.stdout == 0 and $cuser.stderr == 0) {
+        for u in $users {
+            if ($userdata | where name == $u | is-empty) {
+                error make $"can't find user($u)"
+            }
+            let $usergroups = ($userdata | where name == $u | get groups | flatten)
+            for g in $groups {
+                if ($g not-in $usergroups) {
+                    try {
+                    } catch {|e|
+                        error make {
+                            msg: $"can't add user ($u) to ($g)"
+                            label: {
+                                text: $"failed to add user to group with error code: ($e.details.code)"
+                                span: (metadata $e.debug).span
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        error make {
+            msg: "login as root and execute this script again"
+            label: {
+                text: $"can't add user to group without root permissions"
+                span: (metadata ($cuser)).span
+            }
         }
     }
 }
