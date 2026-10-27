@@ -56,9 +56,9 @@ export def used-os []: nothing -> table<name: string, used: bool> {
     return $used_os
 }
 
-# Выполнить команду создания пользователя для каждого имени из пайпа,
-# обернув сбой в единый текст ошибки (такой же, как в оригинале
-# для Linux- и FreeBSD-ветки — они совпадали дословно).
+# Run the user-creation command for each name from the pipe,
+# wrapping any failure in a unified error message (same as in the original
+# Linux- and FreeBSD-branches, which matched verbatim).
 def create-users [cmd: closure]: list<string> -> nothing {
     let users = $in
     for user in $users {

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# install-nushell.sh — установка Nushell и добавление в /etc/shells
-# Поддерживаемые дистрибутивы: Ubuntu (snapd), Debian (apt),
+# install-nushell.sh — install Nushell and add it to /etc/shells
+# Supported distributions: Ubuntu (snapd), Debian (apt),
 # Arch Linux (pacman), openSUSE (zypper), Fedora/RHEL (dnf).
 #
 set -euo pipefail
 
-# Цветной вывод для наглядности
+# Colored output for readability
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -17,36 +17,36 @@ warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
-# 1. Определение дистрибутива
+# 1. Detect the distribution
 # ---------------------------------------------------------------------------
 if [[ -f /etc/os-release ]]; then
     . /etc/os-release
-    DISTRO_ID="${ID,,}"        # приводим к нижнему регистру
-    DISTRO_LIKE="${ID_LIKE:-}" # может быть пустым
+    DISTRO_ID="${ID,,}"        # convert to lowercase
+    DISTRO_LIKE="${ID_LIKE:-}" # may be empty
 else
-    error "Не удалось определить дистрибутив: отсутствует /etc/os-release"
+    error "Failed to detect the distribution: /etc/os-release is missing"
 fi
 
-info "Обнаружен дистрибутив: ${PRETTY_NAME:-$DISTRO_ID}"
+info "Detected distribution: ${PRETTY_NAME:-$DISTRO_ID}"
 
 # ---------------------------------------------------------------------------
-# 2. Функции установки для каждого семейства
+# 2. Install functions for each family
 # ---------------------------------------------------------------------------
 
 install_ubuntu_snap() {
-    info "Установка Nushell через snapd (Ubuntu)…"
+    info "Installing Nushell via snapd (Ubuntu)…"
     if ! command -v snap &>/dev/null; then
-        error "snapd не установлен. Установите snapd и повторите запуск."
+        error "snapd is not installed. Install snapd and run again."
     fi
     sudo snap install nushell --classic
 }
 
 install_debian_apt() {
-    info "Установка Nushell через официальный apt-репозиторий (Debian)…"
+    info "Installing Nushell via the official apt repository (Debian)…"
     sudo apt-get update -qq
     sudo apt-get install -y -qq curl gnupg
 
-    # Добавляем GPG-ключ и репозиторий Fury
+    # Add the GPG key and the Fury repository
     curl -fsSL https://apt.fury.io/nushell/gpg.key \
         | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/fury-nushell.gpg
 
@@ -58,20 +58,20 @@ install_debian_apt() {
 }
 
 install_arch_pacman() {
-    info "Установка Nushell через pacman (Arch Linux)…"
+    info "Installing Nushell via pacman (Arch Linux)…"
     sudo pacman -Sy --noconfirm nushell
 }
 
 install_opensuse_zypper() {
-    info "Установка Nushell через zypper (openSUSE)…"
-    # Пакет nushell доступен в основных репозиториях openSUSE.
+    info "Installing Nushell via zypper (openSUSE)…"
+    # The nushell package is available in the main openSUSE repositories.
     sudo zypper --non-interactive install nushell
 }
 
 install_fedora_dnf() {
-    info "Установка Nushell через dnf (Fedora/RHEL)…"
+    info "Installing Nushell via dnf (Fedora/RHEL)…"
 
-    # Добавляем репозиторий Fury для yum/dnf
+    # Add the Fury repository for yum/dnf
     sudo tee /etc/yum.repos.d/fury-nushell.repo >/dev/null <<'EOF'
 [fury-nushell]
 name=Fury Nushell Repo
@@ -85,14 +85,14 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# 3. Выбор и запуск установщика
+# 3. Select and run the installer
 # ---------------------------------------------------------------------------
 case "$DISTRO_ID" in
     ubuntu)
         install_ubuntu_snap
         ;;
     debian)
-        # В Debian snapd не всегда предустановлен, поэтому используем apt-репозиторий
+        # snapd is not always preinstalled on Debian, so use the apt repository
         install_debian_apt
         ;;
     arch|manjaro|endeavouros)
@@ -105,7 +105,7 @@ case "$DISTRO_ID" in
         install_fedora_dnf
         ;;
     *)
-        # На случай производных дистрибутивов (ID_LIKE)
+        # For derivative distributions (ID_LIKE)
         if [[ "$DISTRO_LIKE" == *"debian"* ]]; then
             install_debian_apt
         elif [[ "$DISTRO_LIKE" == *"arch"* ]]; then
@@ -115,39 +115,39 @@ case "$DISTRO_ID" in
         elif [[ "$DISTRO_LIKE" == *"fedora"* || "$DISTRO_LIKE" == *"rhel"* ]]; then
             install_fedora_dnf
         else
-            error "Неподдерживаемый дистрибутив: $DISTRO_ID (ID_LIKE=$DISTRO_LIKE). Установите Nushell вручную."
+            error "Unsupported distribution: $DISTRO_ID (ID_LIKE=$DISTRO_LIKE). Install Nushell manually."
         fi
         ;;
 esac
 
 # ---------------------------------------------------------------------------
-# 4. Проверка, что nu установлен
+# 4. Verify that nu is installed
 # ---------------------------------------------------------------------------
 if ! command -v nu &>/dev/null; then
-    error "Исполняемый файл 'nu' не найден в PATH после установки. Проверьте установку вручную."
+    error "The 'nu' executable was not found in PATH after installation. Check the installation manually."
 fi
 
 NU_PATH="$(command -v nu)"
-info "Nushell установлен: $NU_PATH"
+info "Nushell installed: $NU_PATH"
 nu --version
 
 # ---------------------------------------------------------------------------
-# 5. Добавление в /etc/shells (если ещё не добавлен)
+# 5. Add to /etc/shells (if not already there)
 # ---------------------------------------------------------------------------
 SHELLS_FILE="/etc/shells"
 
 if [[ ! -f "$SHELLS_FILE" ]]; then
-    warn "$SHELLS_FILE не существует. Создаём пустой файл."
+    warn "$SHELLS_FILE does not exist. Creating an empty file."
     sudo touch "$SHELLS_FILE"
 fi
 
-# Проверяем, есть ли уже точное совпадение строки
+# Check whether an exact line match already exists
 if grep -Fxq "$NU_PATH" "$SHELLS_FILE"; then
-    info "$NU_PATH уже присутствует в $SHELLS_FILE — пропускаем."
+    info "$NU_PATH is already present in $SHELLS_FILE — skipping."
 else
-    info "Добавляем $NU_PATH в $SHELLS_FILE…"
+    info "Adding $NU_PATH to $SHELLS_FILE…"
     echo "$NU_PATH" | sudo tee -a "$SHELLS_FILE" >/dev/null
-    info "Готово. Теперь можно сменить оболочку командой: chsh -s $NU_PATH"
+    info "Done. You can now change the shell with: chsh -s $NU_PATH"
 fi
 
-info "Установка и настройка Nushell завершены успешно."
+info "Nushell installation and setup completed successfully."
