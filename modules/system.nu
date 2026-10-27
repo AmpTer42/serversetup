@@ -123,3 +123,23 @@ export def stop-services [...services: string]: nothing -> nothing {
         }
     }
 }
+
+# restart services from input
+export def restart-services [...services: string]: nothing -> nothing {
+    if ($services | is-empty) {
+        return
+    }
+    let status = (check-services ...$services)
+    let start = ($status | where status == active | get name)
+    try {
+        sudo -n systemctl restart --now ...$start
+    } catch {|e|
+        error make {
+            msg: "can't start services from input"
+            label: {
+                text: $"failed with error code: ($e.exit_code)"
+                span: (metadata $e.debug).span
+            }
+        }
+    }
+}
