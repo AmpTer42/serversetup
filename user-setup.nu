@@ -1,6 +1,6 @@
 #!/usr/bin/env nu
 use std/log *
-use modules/system.nu *
+use modules/system.nu [os-info sudocheck]
 
 # parse /etc/os-release
 let os_info = os-info
@@ -55,7 +55,7 @@ if ($used_os | is-empty) {
 
 # create new user if they weren't already created
 def newuser [user: string]: nothing -> nothing {
-    if ((sys users | where name == $user) != []) {
+    if ((sys users | where name == $user) | is-not-empty) {
         return
     }
     if (($used_os | get --optional name.0) != FreeBSD) {

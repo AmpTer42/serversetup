@@ -1,6 +1,6 @@
 #!/usr/bin/env nu
-use modules/pkg.nu *
-use modules/system.nu *
+use modules/pkg.nu [ensure-installed detect-pm]
+use modules/system.nu [nsudo start-services os-info sudocheck]
 
 # import /etc/os-release contents
 let os_info = os-info
@@ -163,4 +163,5 @@ def main []: nothing -> nothing {
    } else {
         ensure-installed $pmc ...$docker_arch
    }
+    start-services docker
 }

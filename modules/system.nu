@@ -55,3 +55,91 @@ export def nsudo [
         }
     }
 }
+
+# check services status
+export def check-services [...services: string]: nothing -> table<name: string, status: string> {
+    if ($services | is-empty) {
+    return []
+    }
+    try {
+        let states = (systemctl is-active ...$services | lines)
+        mut status_table = []
+        for i in (0..(($services | length) - 1)) {
+            $status_table ++= ([
+            {name: ($services | get --optional $i), status: ($states | get --optional $i)}
+            ])
+            if ($i == ($services | length) - 1) {
+                return $status_table
+            }
+        }
+        return $status_table
+    } catch {|e|
+        error make {
+            msg: "can't parse states of services from input"
+            label: {
+                text: $"failed with error code: ($e.details.code)"
+                span: (metadata $e.debug).span
+            }
+        }
+    }
+}
+
+# start services from input
+export def start-services [...services: string]: nothing -> nothing {
+    if ($services | is-empty) {
+        return
+    }
+    let status = (check-services ...$services)
+    let start = ($status | where status != running | get name)
+    try {
+        sudo -n systemctl enable --now ...$start
+    } catch {|e|
+        error make {
+            msg: "can't start services from input"
+            label: {
+                text: $"failed with error code: ($e.details.code)"
+                span: (metadata $e.debug).span
+            }
+        }
+    }
+}
+
+# stop services from input
+export def stop-services [...services: string]: nothing -> nothing {
+    if ($services | is-empty) {
+        return
+    }
+    let status = (check-services ...$services)
+    let start = ($status | where status == active | get name)
+    try {
+        sudo -n systemctl disable --now ...$start
+    } catch {|e|
+        error make {
+            msg: "can't start services from input"
+            label: {
+                text: $"failed with error code: ($e.exit_code)"
+                span: (metadata $e.debug).span
+            }
+        }
+    }
+}
+
+# restart services from input
+export def restart-services [...services: string]: nothing -> nothing {
+    if ($services | is-empty) {
+        return
+    }
+    let status = (check-services ...$services)
+    let start = ($status | where status == active | get name)
+    try {
+        sudo -n systemctl restart --now ...$start
+    } catch {|e|
+        error make {
+            msg: "can't start services from input"
+            label: {
+                text: $"failed with error code: ($e.exit_code)"
+                span: (metadata $e.debug).span
+            }
+        }
+    }
+}

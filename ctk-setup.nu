@@ -1,6 +1,6 @@
 #!/usr/bin/env nu
-use modules/pkg.nu *
-use modules/system.nu *
+use modules/pkg.nu [ensure-installed detect-pm]
+use modules/system.nu [nsudo sudocheck]
 
 # table of package managers and their packages for nvidia-ctk
 let ctkpm = [
