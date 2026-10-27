@@ -5,38 +5,44 @@ export use ./system.nu [os-info]
 
 
 # table of OSes
-def os []: nothing -> table<name: string, used: bool> {
+export def os []: nothing -> table<name: string, used: bool> {
     let os_info = os-info
     [
         {
             name: Debian,
+            sudogroup: sudo
             used: (($os_info | get ID) == debian)
         }
         {
             name: Arch
+            sudogroup: wheel
             used: (($os_info | get ID_LIKE) == arch or ($os_info | get ID) == arch)
         }
         {
             name: FreeBSD
+            sudogroup: wheel
             used: (($os_info | get ID) == freebsd)
         }
         {
             name: RHEL
+            sudogroup: wheel
             used: (($os_info | get ID_LIKE) == fedora or ($os_info | get ID) == fedora or ($os_info | get ID) == rhel)
         }
         {
             name: OpenSUSE
+            sudogroup: wheel
             used: (($os_info | get ID_LIKE) == suse or ($os_info | get ID_LIKE) == "opensuse suse")
         }
         {
             name: Ubuntu
+            sudogroup: sudo
             used: (($os_info | get ID) == ubuntu)
         }
     ]
 }
 
 # get OS info
-def used-os []: nothing -> table<name: string, used: bool> {
+export def used-os []: nothing -> table<name: string, used: bool> {
     let used_os = (os | where used | first)
     if ($used_os | is-empty) {
         error make {
@@ -191,8 +197,6 @@ export def abgroupmod [
             adder: {|u, g|
                 pw groupmod $g -m $u
             }
-            notfound_msg: {|u| $"can't find user($u)" }
-            add_msg: {|u, g| $"can't add user ($u) to ($g)" }
         }
     } else {
         error make {
