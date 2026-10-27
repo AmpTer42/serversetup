@@ -63,8 +63,8 @@ export def newusers [...users: string]: nothing -> nothing {
     let new_users = ($usertable2 | where (not (created)) | get user)
     if ($new_users | is-empty) { return }
     let cuser = (do { id -u } | complete)
-    for user in $new_users {
-        if ((used-os | get --optional name) != FreeBSD) {
+    if ((used-os | get --optional name) != FreeBSD) {
+        for user in $new_users {
             try {
                 sudo -n useradd -m --shell (which nu | get path.0) -U $user
                 let passwd = (openssl rand -base64 32)
@@ -81,7 +81,9 @@ export def newusers [...users: string]: nothing -> nothing {
                     }
                 }
             }
-        } else if ($cuser.stdout == 0 and $cuser.exit_code == 0) {
+        }
+    } else if ($cuser.stdout == 0 and $cuser.exit_code == 0) {
+        for user in $new_users {
             try {
                 pw useradd -n $user -m -s (which nu | get path.0)
             } catch {|e|
@@ -93,13 +95,13 @@ export def newusers [...users: string]: nothing -> nothing {
                     }
                 }
             }
-        } else {
-            error make {
-                msg: "login as root and execute this script again"
-                label: {
-                    text: $"can't create user ($user) without root permissions"
-                    span: (metadata $user).span
-                }
+        }
+    } else {
+        error make {
+            msg: "login as root and execute this script again"
+            label: {
+                text: $"can't create users without root permissions"
+                span: (metadata $cuser).span
             }
         }
     }
