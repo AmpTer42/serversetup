@@ -8,9 +8,7 @@ on:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
-    container:
-      image: rust:latest
+    runs-on: rust-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
