@@ -9,12 +9,11 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    container:
+      image: rust:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-
-      - name: Setup Rust & Cache
-        uses: actions-rust-lang/setup-rust-toolchain@v2
 
       - name: Install nu-lint
         run: cargo install nu-lint --locked
