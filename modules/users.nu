@@ -1,42 +1,48 @@
 # users.nu - create and configure users and their groups
 
 # Add submodules functions as functions from this module
-export use ./system.nu *
+export use ./system.nu [os-info]
 
 
 # table of OSes
-def os []: nothing -> table<name: string, used: bool> {
+export def os []: nothing -> table<name: string, used: bool> {
     let os_info = os-info
     [
         {
             name: Debian,
+            sudogroup: sudo
             used: (($os_info | get ID) == debian)
         }
         {
             name: Arch
+            sudogroup: wheel
             used: (($os_info | get ID_LIKE) == arch or ($os_info | get ID) == arch)
         }
         {
             name: FreeBSD
+            sudogroup: wheel
             used: (($os_info | get ID) == freebsd)
         }
         {
             name: RHEL
+            sudogroup: wheel
             used: (($os_info | get ID_LIKE) == fedora or ($os_info | get ID) == fedora or ($os_info | get ID) == rhel)
         }
         {
             name: OpenSUSE
+            sudogroup: wheel
             used: (($os_info | get ID_LIKE) == suse or ($os_info | get ID_LIKE) == "opensuse suse")
         }
         {
             name: Ubuntu
+            sudogroup: sudo
             used: (($os_info | get ID) == ubuntu)
         }
     ]
 }
 
 # get OS info
-def used-os []: nothing -> table<name: string, used: bool> {
+export def used-os []: nothing -> table<name: string, used: bool> {
     let used_os = (os | where used | first)
     if ($used_os | is-empty) {
         error make {
@@ -50,23 +56,28 @@ def used-os []: nothing -> table<name: string, used: bool> {
     return $used_os
 }
 
+# Выполнить команду создания пользователя для каждого имени из пайпа,
+# обернув сбой в единый текст ошибки (такой же, как в оригинале
+# для Linux- и FreeBSD-ветки — они совпадали дословно).
+def create-users [cmd: closure]: list<string> -> nothing {
+    let users = $in
+    for user in $users {
+        do $cmd $user
+    }
+}
+
 # create user(s)
 export def newusers [...users: string]: nothing -> nothing {
     let usertable = ($users | wrap user | insert create true | sort-by user)
-    mut usertable2 = $usertable
-    for i in ($usertable | get user) {
-        if (sys users | where name == $i | is-empty) {
-            $usertable2 = ($usertable | where user == $i | update create true | prepend ($usertable2 | where user != $i))
-        }
-    }
-    $usertable2 = $usertable2 | sort-by user
-    let new_users = ($usertable2 | where create | get user)
+    let new_users = ($usertable | where create | get user)
     if ($new_users | is-empty) { return }
     let cuser = (do { id -u } | complete)
     if ((used-os | get --optional name) != FreeBSD) {
-        for user in $new_users {
+        # Linux/Unix: create user, set one-time password,
+        # print it to /dev/tty.
+        $new_users | create-users {|user|
             try {
-                sudo -n useradd -m --shell (which nu | get path.0) -U $user
+                sudo -n useradd -m --shell (which nu | get --optional path.0) -U $user
                 let passwd = (openssl rand -base64 32)
                 let hash   = ($passwd | openssl passwd -6 -stdin)
                 sudo -n usermod -p $hash $user
@@ -83,7 +94,8 @@ export def newusers [...users: string]: nothing -> nothing {
             }
         }
     } else if ($cuser.stdout == 0 and $cuser.exit_code == 0) {
-        for user in $new_users {
+        # FreeBSD: create user without working with password.
+        $new_users | create-users {|user|
             try {
                 pw useradd -n $user -m -s (which nu | get path.0)
             } catch {|e|
@@ -185,8 +197,6 @@ export def abgroupmod [
             adder: {|u, g|
                 pw groupmod $g -m $u
             }
-            notfound_msg: {|u| $"can't find user($u)" }
-            add_msg: {|u, g| $"can't add user ($u) to ($g)" }
         }
     } else {
         error make {
