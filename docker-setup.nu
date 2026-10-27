@@ -1,5 +1,5 @@
 #!/usr/bin/env nu
-use modules/pkg.nu *
+use modules/pkg.nu [ensure-installed detect-pm]
 use modules/system.nu [nsudo start-services os-info sudocheck]
 
 # import /etc/os-release contents
