@@ -1,7 +1,7 @@
 # users.nu - create and configure users and their groups
 
 # Add submodules functions as functions from this module
-export use ./system.nu *
+export use ./system.nu [os-info]
 
 
 # table of OSes
