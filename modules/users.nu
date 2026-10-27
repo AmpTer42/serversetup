@@ -119,7 +119,7 @@ export def abgroupmod [
             if ($userdata | where name == $u | is-empty) {
                 error make $"can't find user ($u)"
             }
-            let $usergroups = ($userdata | where name == $u | get groups | flatten)
+            let usergroups = ($userdata | where name == $u | get groups | flatten)
             for g in $groups {
                 if ($g not-in $usergroups) {
                     try {
@@ -142,10 +142,11 @@ export def abgroupmod [
             if ($userdata | where name == $u | is-empty) {
                 error make $"can't find user($u)"
             }
-            let $usergroups = ($userdata | where name == $u | get groups | flatten)
+            let usergroups = ($userdata | where name == $u | get groups | flatten)
             for g in $groups {
                 if ($g not-in $usergroups) {
                     try {
+                        pw groupmod $g -m $u
                     } catch {|e|
                         error make {
                             msg: $"can't add user ($u) to ($g)"
