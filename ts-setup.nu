@@ -6,7 +6,7 @@ use modules/users.nu [used-os os-info]
 let used_os = used-os
 let os_name = ($used_os | get name)
 let os_id = ($used_os | get ID)
-let pm = (detect-pm | first)
+let pmc = detect-pm
 
 # add Tailscale repo to OS repos
 def ts-repo [os: string]: nothing -> nothing {
@@ -19,9 +19,8 @@ def ts-repo [os: string]: nothing -> nothing {
                 if ($os_id == opensuse-tumbleweed) {
                     sudo -n zypper addrepo obs://network:vpn/openSUSE_Factory network:vpn-factory
                 } else {
-                    let ver = (os-info | get VERSION_ID | str trim '"')
-                    let url_ver = ($ver | replace ' ' _)
-                    let repo_url = ($"obs://network:vpn/($url_ver)")
+                    let ver = (os-info | get VERSION_ID | str replace --all _ ' ')
+                    let repo_url = ($"obs://network:vpn/($ver | str replace --all ' ' _)")
                     sudo -n zypper addrepo $repo_url network:vpn
                 }
             }
@@ -40,7 +39,7 @@ def ts-repo [os: string]: nothing -> nothing {
                 http get --raw $url | nsudo --sudo-flags [-n] 'save --raw /etc/apt/sources.list.d/tailscale.list'
             }
             "RHEL" => {
-                let version_id = (os-info | get VERSION_ID | str trim '"')
+                let version_id = (os-info | get VERSION_ID)
                 let ind = (($version_id | str index-of .) - 1)
                 let major_ver = ($version_id | str substring 0..$ind)
                 let url = $"https://pkgs.tailscale.com/stable/rhel/($major_ver)/tailscale.repo"
@@ -70,7 +69,7 @@ def main [
 ]: nothing -> nothing {
     sudocheck
     ts-repo $os_name
-    ensure-installed [$pm] tailscale
+    ensure-installed $pmc tailscale
     start-services tailscaled
     try {
         sudo -n tailscale up --auth-key $key
