@@ -47,7 +47,7 @@ export def os []: nothing -> table<name: string, used: bool> {
 }
 
 # get OS info
-export def used-os []: nothing -> table<name: string, used: bool, ID: string> {
+export def used-os []: nothing -> record<name: string, sudogroup: string, used: bool, ID: string> {
     let used_os = (os | where used | first | insert ID (os-info | get ID))
     if ($used_os | is-empty) {
         error make {

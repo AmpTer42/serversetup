@@ -54,10 +54,12 @@ def ts-repo [os: string]: nothing -> nothing {
             }
         }
     } catch {|e|
-        msg: $"couldn't add repo on ($os)"
-        label: {
-            text: $"failed with error code: ($e.details.code)"
-            span: (metadata $e.debug).span
+        error make {
+            msg: $"couldn't add repo on ($os)"
+            label: {
+                text: $"failed with error code: ($e.details.code)"
+                span: (metadata $e.debug).span
+            }
         }
     }
 }

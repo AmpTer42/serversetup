@@ -59,7 +59,7 @@ def ctk-repo-install [...pms: string]: nothing -> list<string> {
                 $inst ++= [pacman]
             }
             "apt" => {
-                ensure-installed [gpg] [$i]
+                ensure-installed [$i] gpg
                 try {
                     http get --raw https://nvidia.github.io/libnvidia-container/gpgkey | nsudo --sudo-flags [-n] 'gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg' # used nsudo for correct pipelines
                     http get --raw https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | str replace --all 'deb https://' 'deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://' | nsudo --sudo-flags [-n] 'save /etc/apt/sources.list.d/nvidia-container-toolkit.list'

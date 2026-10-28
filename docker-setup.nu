@@ -1,38 +1,10 @@
 #!/usr/bin/env nu
 use modules/pkg.nu [ensure-installed detect-pm]
 use modules/system.nu [nsudo start-services os-info sudocheck]
-use modules/users.nu [abgroupmod]
+use modules/users.nu [abgroupmod used-os]
 
-# import /etc/os-release contents
-let os_info = os-info
-
-# os table with used os calculation
-let os = [
-    {
-        name: Debian
-        used: (($os_info | get --optional ID) == debian)
-    }
-    {
-        name: Arch
-        used: (($os_info | get --optional ID_LIKE) == arch or ($os_info | get --optional ID) == arch)
-    }
-    {
-        name: RHEL
-        used: (($os_info | get --optional ID) == rhel)
-    }
-    {
-        name: Fedora
-        used: (($os_info | get --optional ID) == fedora)
-    }
-    {
-        name: OpenSUSE
-        used: (($os_info | get --optional ID_LIKE) == suse or ($os_info | get ID_LIKE) == "opensuse suse")
-    }
-    {
-        name: Ubuntu
-        used: (($os_info | get --optional ID) == ubuntu)
-    }
-]
+# detect installed OS on computer (errors on unsupported OS)
+let used_os = used-os
 
 # docker packages for non-Arch distros
 let docker_std = [
@@ -49,34 +21,6 @@ let docker_arch = [
     docker-compose
     docker-buildx
 ]
-
-# calculate candidate of os on computer
-let candidates = ($os | where used)
-
-# check if it's empty
-if ($candidates | is-empty) {
-    error make {
-        msg: $"using unsupported OS: ($candidates | get ID)"
-        label: {
-            text: $"unsupported OS: ($candidates| get ID)"
-            span: (metadata $candidates).span
-        }
-    }
-}
-
-# check if there's more than one candidate
-if (($candidates | length) > 1) {
-    error make {
-        msg: $"More than one OS candidate"
-        label: {
-            text: ($candidates)
-            span: (metadata $candidates).span
-        }
-    }
-}
-
-# calculate installed os on computer
-let used_os = $candidates.0?
 
 # create a list of available package managers
 let pmc = detect-pm
