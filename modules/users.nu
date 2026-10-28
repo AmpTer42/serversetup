@@ -1,11 +1,12 @@
 # users.nu - create and configure users and their groups
 
 # Add submodules functions as functions from this module
-export use ./system.nu [os-info]
+export use ./system.nu [os-info is-root]
 
 
-# table of OSes
-export def os []: nothing -> table<name: string, used: bool> {
+# table of OSes: which one matches the current host and
+# which group grants sudo there (sudo on Debian/Ubuntu, wheel elsewhere)
+export def os []: nothing -> table<name: string, sudogroup: string, used: bool> {
     let os_info = os-info
     [
         {
@@ -14,75 +15,68 @@ export def os []: nothing -> table<name: string, used: bool> {
             used: (($os_info | get ID) == debian)
         }
         {
-            name: Arch
+            name: Arch,
             sudogroup: wheel
             used: (($os_info | get ID_LIKE) == arch or ($os_info | get ID) == arch)
         }
         {
-            name: FreeBSD
+            name: FreeBSD,
             sudogroup: wheel
             used: (($os_info | get ID) == freebsd)
         }
         {
-            name: RHEL
+            name: RHEL,
             sudogroup: wheel
             used: (($os_info | get ID) == rhel)
         }
         {
-            name: OpenSUSE
+            name: OpenSUSE,
             sudogroup: wheel
             used: (($os_info | get ID_LIKE) == suse or ($os_info | get ID_LIKE) == "opensuse suse")
         }
         {
-            name: Fedora
+            name: Fedora,
             sudogroup: wheel
             used: (($os_info | get ID) == fedora)
         }
         {
-            name: Ubuntu
+            name: Ubuntu,
             sudogroup: sudo
             used: (($os_info | get ID) == ubuntu)
         }
     ]
 }
 
-# get OS info
-export def used-os []: nothing -> table<name: string, used: bool, ID: string> {
-    let used_os = (os | where used | first | insert ID (os-info | get ID))
-    if ($used_os | is-empty) {
+# get the detected OS as a single record, errors on unsupported OS
+export def used-os []: nothing -> record<name: string, sudogroup: string, used: bool, ID: string> {
+    let candidates = (os | where used)
+    if ($candidates | is-empty) {
         error make {
-            msg: $"using unsupported OS: (os-info | get ID)"
+            msg: $"using unsupported OS: (os-info | get --optional ID)"
             label: {
-              text: $"unsupported OS: (os-info | get ID)"
+              text: $"unsupported OS: (os-info | get --optional ID)"
               span: (metadata (os-info)).span
             }
         }
     }
-    return $used_os
+    return ($candidates | first | insert ID (os-info | get ID))
 }
 
-# Run the user-creation command for each name from the pipe,
-# wrapping any failure in a unified error message (same as in the original
-# Linux- and FreeBSD-branches, which matched verbatim).
-def create-users [cmd: closure]: list<string> -> nothing {
-    let users = $in
-    for user in $users {
-        do $cmd $user
-    }
-}
-
-# create user(s)
+# create user(s); users that already exist are skipped.
+# On Linux a random one-time password is set (printed to /dev/tty,
+# expired immediately so the user must change it at first login).
+# On FreeBSD users are created bare (as root, no password handling).
 export def newusers [...users: string]: nothing -> nothing {
-    let usertable = ($users | wrap user | insert create true | sort-by user)
-    let new_users = ($usertable | where create | get user)
-    if ($new_users | is-empty) { return }
-    let cuser = (do { id -u } | complete)
+    if ($users | is-empty) { return }
+    let nupath = (which nu | get --optional path.0)
+    let existing = (sys users | get name)
     if ((used-os | get --optional name) != FreeBSD) {
         # Linux/Unix: create user, set one-time password,
         # print it to /dev/tty.
-        $new_users | create-users {|user|
+        for user in $users {
+            if ($user in $existing) { continue }
             try {
-                sudo -n useradd -m --shell (which nu | get --optional path.0) -U $user
+                sudo -n useradd -m --shell $nupath -U $user
                 let passwd = (openssl rand -base64 32)
                 let hash   = ($passwd | openssl passwd -6 -stdin)
                 sudo -n usermod -p $hash $user
@@ -90,7 +84,7 @@ export def newusers [...users: string]: nothing -> nothing {
                 $"($user) one-time password: ($passwd)\n" | save --raw --append /dev/tty
             } catch {|e|
                 error make {
-                    msg: $"can't add user ($user): error code ($e.details.code)"
+                    msg: $"can't add user ($user): error code ($e | get --optional exit_code | default unknown)"
                     label: {
                         text: $"can't create user ($user)"
                         span: (metadata $e.debug).span
@@ -98,14 +92,15 @@ export def newusers [...users: string]: nothing -> nothing {
                 }
             }
         }
-    } else if ($cuser.stdout == 0 and $cuser.exit_code == 0) {
+    } else if (is-root) {
         # FreeBSD: create user without working with password.
-        $new_users | create-users {|user|
+        for user in ($users | sort) {
+            if ($user in $existing) { continue }
             try {
-                pw useradd -n $user -m -s (which nu | get path.0)
+                pw useradd -n $user -m -s $nupath
             } catch {|e|
                 error make {
-                    msg: $"can't add user ($user): error code ($e.details.code)"
+                    msg: $"can't add user ($user): error code ($e | get --optional exit_code | default unknown)"
                     label: {
                         text: $"can't create user ($user)"
                         span: (metadata $e.debug).span
@@ -118,38 +113,31 @@ export def newusers [...users: string]: nothing -> nothing {
             msg: "login as root and execute this script again"
             label: {
                 text: $"can't create users without root permissions"
-                span: (metadata $cuser).span
+                span: (metadata $users).span
             }
         }
     }
 }
 
-# add one user to one group using one adder
-def add-to-group [
-    adder: closure
-]: record<user: string, group: string> -> nothing {
-    let target = $in
-    try {
-        do $adder $target.user $target.group
-    } catch {|e|
+# add user(s) to group(s); a group is created if it doesn't exist.
+# Linux uses sudo + groupadd/usermod, FreeBSD uses pw (requires root).
+export def abgroupmod [
+    users: list<string> # list of users to add to groups
+    ...groups: string   # list of groups
+]: nothing -> nothing {
+    if (($users | is-empty) or ($groups | is-empty)) { return }
+    let userdata = (sys users | sort-by id | where name != nobody | where id >= 1000)
+    let freebsd = ((used-os | get --optional name) == FreeBSD)
+    if ($freebsd and not (is-root)) {
         error make {
-            msg: $"can't add ($target.user) to group ($target.group)"
+            msg: "login as root and execute this script again"
             label: {
-                text: $"failed to add user to group"
-                span: (metadata $e.debug).span
+                text: $"can't add user to group without root permissions"
+                span: (metadata $users).span
             }
         }
     }
-}
-
-# common cycle: check user, get their groups,
-# add to all unexisting groups using OS-specific adder
-def process-users [
-    spec: record<users: list<string>, groups: list<string>
-    adder: closure>
-]: table<name: string, id: int, groups: list<string>> -> nothing {
-    let userdata = $in
-    for u in $spec.users {
+    for u in $users {
         let matches = ($userdata | where name == $u)
         if ($matches | is-empty) {
             error make {
@@ -161,54 +149,24 @@ def process-users [
             }
         }
         let ug = ($matches | get groups | flatten)
-        for g in $spec.groups {
+        for g in $groups {
             if ($g not-in $ug) {
-                {user: $u, group: $g} | add-to-group $spec.adder
-            }
-        }
-    }
-}
-
-# add user(s) to group(s)
-export def abgroupmod [
-    users: list<string> # list of users to add to groups
-    ...groups: string   # list of groups
-]: nothing -> nothing {
-    let userdata = (sys users | sort-by id | where name != nobody | where id >= 1000)
-    let cuser = (do { id -u } | complete)
-    if ((used-os | get --optional name) != FreeBSD) {
-        $userdata | process-users {
-            users: $users
-            groups: $groups
-            adder: {|u, g|
-                try {
-                    sudo -n groupadd --force $g
-                    sudo -n usermod --append --groups $g $u
-                } catch {|e|
-                    error make {
-                        msg: "can't use given closure"
-                        label: {
-                            text: $"failed with error code: ($e.details.code)"
-                            span: (metadata $e.debug).span
+                if $freebsd {
+                    pw groupmod $g -m $u
+                } else {
+                    try {
+                        sudo -n groupadd --force $g
+                        sudo -n usermod --append --groups $g $u
+                    } catch {|e|
+                        error make {
+                            msg: $"can't add ($u) to group ($g)"
+                            label: {
+                                text: $"failed with error code: ($e | get --optional exit_code | default unknown)"
+                                span: (metadata $e.debug).span
+                            }
                         }
                     }
                 }
-            }
-        }
-    } else if ($cuser.stdout == 0 and $cuser.stderr == 0) {
-        $userdata | process-users {
-            users: $users
-            groups: $groups
-            adder: {|u, g|
-                pw groupmod $g -m $u
-            }
-        }
-    } else {
-        error make {
-            msg: "login as root and execute this script again"
-            label: {
-                text: $"can't add user to group without root permissions"
-                span: (metadata ($cuser)).span
             }
         }
     }

@@ -1,36 +1,48 @@
 #!/usr/bin/env nu
-use modules/system.nu [os-info sudocheck]
+# user-setup.nu - create users with a one-time password
+# and add them to the OS sudo/wheel group.
+
+use modules/system.nu [is-root os-info sudocheck]
 use modules/users.nu [newusers abgroupmod used-os os]
 
-let os = os
 let used_os = used-os
 
-# add existing user to sudo if they weren't already added
-def addtosudo [user: string]: nothing -> nothing {
-    if ((sys users | where name == $user | get groups | flatten | find ($os | where used | get sudogroup)) != []) {
-        return
-    }
-    let cuser = (do { id -u } | complete)
-    let groupadd = ($os | where used | get --optional sudogroup.0)
-    if (($used_os | get --optional name.0) != FreeBSD) {
+# add existing users to sudo if they weren't already added
+def addtosudo [...users: string]: nothing -> nothing {
+    if ($users | is-empty) { return }
+    let groupadd = (os | where used | get --optional sudogroup)
+    # find users that are already members of the sudo group
+    let sudoers = (sys users | where name in $users | where ($it.groups | any {|g| $g == $groupadd}) | get name)
+    let missing = ($users | where $it not-in $sudoers)
+    if ($missing | is-empty) { return }
+    if (($used_os | get --optional name) != FreeBSD) {
         sudocheck
-    } else if ($cuser.exit_code != 0 or $cuser.stdout != 0) {
+    } else if (not (is-root)) {
         error make {
             msg: "login as root and execute this script again"
             label: {
-                text: $"can't add user ($user) to ($groupadd) without root permissions"
+                text: $"can't add users to ($groupadd) without root permissions"
+                span: (metadata $users).span
+            }
+        }
+    }
+    abgroupmod $missing ...$groupadd
+}
+
+# setup user(s)
+def main [
+    ...user: string # Users that must be set up
+]: nothing -> nothing {
+    if ($user | is-empty) {
+        error make {
+            msg: "no users provided"
+            label: {
+                text: "provide at least one username"
                 span: (metadata $user).span
             }
         }
     }
-    abgroupmod [$user] $groupadd
-}
-
-# setup user
-def main [
-    user: string # User that must be set up
-]: nothing -> nothing {
     sudocheck
-    newusers $user
-    addtosudo $user
+    newusers ...$user
+    addtosudo ...$user
 }

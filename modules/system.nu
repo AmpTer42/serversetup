@@ -1,12 +1,20 @@
 # system.nu - generic work with system
 
+# Extract the exit code (or unknown) from a caught error
+def err-code []: record -> string { get --optional exit_code | default unknown }
+
+# Check if the current user is root
+export def is-root []: nothing -> bool {
+    (id -u | str trim | into int) == 0
+}
+
 # Check if sudo is present in this environment
 export def sudocheck []: nothing -> nothing {
     try {
         sudo -v
     } catch {|e|
         error make {
-            msg: $"can't use sudo: ($e.details.code)"
+            msg: $"can't use sudo: ($e.msg)"
             label: {
                 text: "sudo failed"
                 span: (metadata $e.debug).span
@@ -15,13 +23,13 @@ export def sudocheck []: nothing -> nothing {
     }
 }
 
-# Parse /etc/os-release
+# Parse /etc/os-release (values are unquoted)
 export def os-info []: nothing -> record {
     try {
-      open /etc/os-release | lines | parse '{key}={value}' | reduce --fold {} {|it, acc| $acc | insert $it.key $it.value } | into record
+        open /etc/os-release | lines | parse '{key}={value}' | reduce --fold {} {|it, acc| $acc | insert $it.key ($it.value | str trim --char (char dq)) } | into record
     } catch {|e|
         error make {
-            msg: $"can't open /etc/os-release: error code ($e.details.code)"
+            msg: $"can't open /etc/os-release: ($e.msg)"
             label: {
                 text: $"can't open /etc/os-release"
                 span: (metadata $e.debug).span
@@ -31,7 +39,9 @@ export def os-info []: nothing -> record {
     }
 }
 
-# Run a command or closure in an elevated shell
+# Run a command or closure in an elevated shell.
+# Pipeline input is serialized and piped to the root Nu process via stdin,
+# so the elevated command can consume it (e.g. 'save /path' from a pipe).
 export def nsudo [
     command?: string,                      # Command to execute
     --closure (-c) : closure,                # Closure to execute if not command is given
@@ -40,7 +50,7 @@ export def nsudo [
     let nu_path = (which nu).0?.path
     try {
         let script = (
-            if $command != null { $'from nuon | do { ($command) }' }
+            if $command != null { $command }
             else if $closure != null { $'from nuon | do ($closure | to nuon --serialize | from nuon)' }
             else { error make "a command or closure must be provided" }
         )
@@ -56,88 +66,83 @@ export def nsudo [
     }
 }
 
-# check services status
+# check services status via systemctl is-active
 export def check-services [...services: string]: nothing -> table<name: string, status: string> {
     if ($services | is-empty) {
-    return []
+        return []
     }
     try {
         let states = (systemctl is-active ...$services | lines)
-        mut status_table = []
-        for i in (0..(($services | length) - 1)) {
-            $status_table ++= ([
-            {name: ($services | get --optional $i), status: ($states | get --optional $i)}
-            ])
-            if ($i == ($services | length) - 1) {
-                return $status_table
-            }
-        }
-        return $status_table
+        $services | zip $states | each {|x| {name: ($x | get 0), status: ($x | get 1)} }
     } catch {|e|
         error make {
             msg: "can't parse states of services from input"
             label: {
-                text: $"failed with error code: ($e.details.code)"
+                text: $"failed with error code: ($e | err-code)"
                 span: (metadata $e.debug).span
             }
         }
     }
 }
 
-# start services from input
+# start (enable --now) services that aren't active yet
 export def start-services [...services: string]: nothing -> nothing {
     if ($services | is-empty) {
         return
     }
     let status = (check-services ...$services)
-    let start = ($status | where status != running | get name)
+    let start = ($status | where status != active | get name)
+    if ($start | is-empty) {
+        return
+    }
     try {
         sudo -n systemctl enable --now ...$start
     } catch {|e|
         error make {
             msg: "can't start services from input"
             label: {
-                text: $"failed with error code: ($e.details.code)"
+                text: $"failed with error code: ($e | err-code)"
                 span: (metadata $e.debug).span
             }
         }
     }
 }
 
-# stop services from input
+# stop (disable --now) services that are currently active
 export def stop-services [...services: string]: nothing -> nothing {
     if ($services | is-empty) {
         return
     }
     let status = (check-services ...$services)
-    let start = ($status | where status == active | get name)
+    let stop = ($status | where status == active | get name)
+    if ($stop | is-empty) {
+        return
+    }
     try {
-        sudo -n systemctl disable --now ...$start
+        sudo -n systemctl disable --now ...$stop
     } catch {|e|
         error make {
-            msg: "can't start services from input"
+            msg: "can't stop services from input"
             label: {
-                text: $"failed with error code: ($e.exit_code)"
+                text: $"failed with error code: ($e | err-code)"
                 span: (metadata $e.debug).span
             }
         }
     }
 }
 
-# restart services from input
+# restart active services
 export def restart-services [...services: string]: nothing -> nothing {
     if ($services | is-empty) {
         return
     }
-    let status = (check-services ...$services)
-    let start = ($status | where status == active | get name)
     try {
-        sudo -n systemctl restart --now ...$start
+        sudo -n systemctl restart ...$services
     } catch {|e|
         error make {
-            msg: "can't start services from input"
+            msg: "can't restart services from input"
             label: {
-                text: $"failed with error code: ($e.exit_code)"
+                text: $"failed with error code: ($e | err-code)"
                 span: (metadata $e.debug).span
             }
         }
