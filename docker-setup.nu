@@ -1,6 +1,7 @@
 #!/usr/bin/env nu
 use modules/pkg.nu [ensure-installed detect-pm]
 use modules/system.nu [nsudo start-services os-info sudocheck]
+use modules/users.nu [abgroupmod]
 
 # import /etc/os-release contents
 let os_info = os-info
@@ -155,7 +156,9 @@ def docker-repo [os: string]: nothing -> nothing {
 }
 
 # the full instruction to install docker and plugins
-def main []: nothing -> nothing {
+def main [
+    ...users: string # usernames to add to the docker group
+]: nothing -> nothing {
     sudocheck
     docker-repo $used_os.name
     if ($used_os.name != Arch) {
@@ -164,4 +167,5 @@ def main []: nothing -> nothing {
         ensure-installed $pmc ...$docker_arch
    }
     start-services docker
+    abgroupmod $users docker
 }

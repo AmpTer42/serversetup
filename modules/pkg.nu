@@ -29,6 +29,11 @@ def pm-table []: nothing -> table<name: string, cmd: string, used: bool> {
             cmd: snap,
             used: (which snap | is-not-empty),
         }
+        {
+            name: pkg,
+            cmd: pkg,
+            used: (which pkg | is-not-empty)
+        }
     ]
 }
 
@@ -39,7 +44,7 @@ export def detect-pm []: nothing -> list<string> {
         error make {
             msg: "no supported package manager"
             label: {
-                text: "needs apt-get, dnf, zypper or pacman"
+                text: "needs apt-get, dnf, zypper, pkg or pacman"
                 span: (metadata $found).span
             }
         }
@@ -58,6 +63,7 @@ def pkg-installed [pmc: string, pkg: string]: nothing -> bool {
         "dnf"    => { (do { dnf -q list installed $pkg } | complete).exit_code == 0 }
         "zypper" => { (do { rpm -q --quiet $pkg } | complete).exit_code == 0 }
         "snap" => { (do { snap list $pkg } | complete).exit_code == 0 }
+        "pkg" => { (do { pkg info -e $pkg } | complete).exit_code == 0 }
         _ => {
             error make {
                 msg: "using non-matched package manager"
@@ -93,6 +99,9 @@ def pkg-install [pmc: string, pkg: string]: nothing -> nothing {
                     sudo -n snap install --classic $pkg
                 }
             }
+            "pkg" => {
+                pkg install -y $pkg
+            }
         }
     } catch {|e|
         error make {
@@ -105,9 +114,44 @@ def pkg-install [pmc: string, pkg: string]: nothing -> nothing {
     }
 }
 
+# Refresh packages index
+export def refresh-pkgs [pmc: string]: nothing -> nothing {
+    try {
+        match $pmc {
+            "apt" => {
+                sudo -n env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a APT_LISTCHANGES_FRONTEND=none apt-get update -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=60 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold
+            }
+            "dnf" => {
+                sudo -n dnf -q makecache --refresh
+            }
+            "pacman" => {
+                sudo -n pacman -Syuq
+            }
+            "zypper" => {
+                sudo -n zypper --non-interactive --gpg-auto-import-keys refresh
+            }
+            "snap" => {
+                sudo -n snap refresh
+            }
+            "pkg" => {
+                pkg update
+            }
+        }
+    } catch {|e|
+        error make {
+            msg: $"refresh failed"
+            label: {
+                text: $"command failed with error code: ($e.details.code)"
+                span: (metadata $e.debug).span
+            }
+        }
+    }
+}
+
 # Install packages if they aren't already installed
 export def ensure-installed [pmc: list<string>, ...pkg: string]: nothing -> nothing {
     for i in $pmc {
+        refresh-pkgs $i
         for j in $pkg {
             if (pkg-installed $i $j) { continue } else {
                 pkg-install $i $j

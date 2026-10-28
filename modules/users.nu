@@ -26,12 +26,17 @@ export def os []: nothing -> table<name: string, used: bool> {
         {
             name: RHEL
             sudogroup: wheel
-            used: (($os_info | get ID_LIKE) == fedora or ($os_info | get ID) == fedora or ($os_info | get ID) == rhel)
+            used: (($os_info | get ID) == rhel)
         }
         {
             name: OpenSUSE
             sudogroup: wheel
             used: (($os_info | get ID_LIKE) == suse or ($os_info | get ID_LIKE) == "opensuse suse")
+        }
+        {
+            name: Fedora
+            sudogroup: wheel
+            used: (($os_info | get ID) == fedora)
         }
         {
             name: Ubuntu
@@ -42,8 +47,8 @@ export def os []: nothing -> table<name: string, used: bool> {
 }
 
 # get OS info
-export def used-os []: nothing -> table<name: string, used: bool> {
-    let used_os = (os | where used | first)
+export def used-os []: nothing -> table<name: string, used: bool, ID: string> {
+    let used_os = (os | where used | first | insert ID (os-info | get ID))
     if ($used_os | is-empty) {
         error make {
             msg: $"using unsupported OS: (os-info | get ID)"
@@ -56,9 +61,9 @@ export def used-os []: nothing -> table<name: string, used: bool> {
     return $used_os
 }
 
-# Выполнить команду создания пользователя для каждого имени из пайпа,
-# обернув сбой в единый текст ошибки (такой же, как в оригинале
-# для Linux- и FreeBSD-ветки — они совпадали дословно).
+# Run the user-creation command for each name from the pipe,
+# wrapping any failure in a unified error message (same as in the original
+# Linux- and FreeBSD-branches, which matched verbatim).
 def create-users [cmd: closure]: list<string> -> nothing {
     let users = $in
     for user in $users {
