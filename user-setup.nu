@@ -6,11 +6,11 @@ let used_os = used-os
 
 # add existing user to sudo if they weren't already added
 def addtosudo [user: string]: nothing -> nothing {
-    let groupadd = (os | where used | get --optional sudogroup.0)
+    let groupadd = (os | where used | get --optional sudogroup)
     if ((sys users | where name == $user | get groups | flatten | find $groupadd) != []) {
         return
     }
-    if (($used_os | get --optional name.0) != FreeBSD) {
+    if (($used_os | get --optional name) != FreeBSD) {
         sudocheck
     } else if (not (is-root)) {
         error make {
@@ -21,7 +21,7 @@ def addtosudo [user: string]: nothing -> nothing {
             }
         }
     }
-    abgroupmod [$user] $groupadd
+    abgroupmod [$user] ...$groupadd
 }
 
 # setup user
