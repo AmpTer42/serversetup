@@ -1,4 +1,7 @@
 #!/usr/bin/env nu
+# ctk-setup.nu - install the NVIDIA Container Toolkit,
+# generate the CDI spec and configure the Docker runtime for GPU support.
+
 use modules/pkg.nu [ensure-installed detect-pm]
 use modules/system.nu [nsudo sudocheck]
 
@@ -58,6 +61,8 @@ def ctk-repo-install [...pms: string]: nothing -> list<string> {
                 # nvidia-ctk is already in extra repo
                 $inst ++= [pacman]
             }
+            # Debian: dearmor the key, patch the source list
+            # with signed-by and refresh the index
             "apt" => {
                 ensure-installed [$i] gpg
                 try {
@@ -73,6 +78,7 @@ def ctk-repo-install [...pms: string]: nothing -> list<string> {
                     $inst ++= [dnf]
                 }
             }
+            # zypper: add the repo only if it's missing
             "zypper" => {
                 let zypperrepo = https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo
                 let currentrepos = (zypper --xmlout lr -u =~ $zypperrepo)
@@ -102,6 +108,7 @@ def ctk-repo-install [...pms: string]: nothing -> list<string> {
 # install packages from ctkpm table
 def ctk-install [...pms: string]: nothing -> nothing {
     for i in $pms {
+        # take the package list for this PM from the table
         let utils = ($ctkpm | where name == $i | get --optional pkgs | first)
         ensure-installed $pms ...$utils
     }
@@ -109,6 +116,7 @@ def ctk-install [...pms: string]: nothing -> nothing {
 
 # configure nvidia-ctk
 def ctk-config []: nothing -> nothing {
+    # drivers must already work before the toolkit can be set up
     try {
         nvidia-smi
     } catch {|e|
@@ -122,6 +130,7 @@ def ctk-config []: nothing -> nothing {
         }
     }
     try {
+        # generate the CDI spec and register the nvidia runtime in Docker
         sudo -n install -d /etc/cdi
         sudo -n nvidia-ctk cdi generate --quiet --output="/etc/cdi/nvidia.yaml"
         sudo -n nvidia-ctk runtime configure --runtime=docker --config=/etc/docker/daemon.json

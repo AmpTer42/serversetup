@@ -4,7 +4,8 @@
 export use ./system.nu [os-info is-root]
 
 
-# table of OSes
+# table of OSes: which one matches the current host and
+# which group grants sudo there (sudo on Debian/Ubuntu, wheel elsewhere)
 export def os []: nothing -> table<name: string, sudogroup: string, used: bool> {
     let os_info = os-info
     [
@@ -46,7 +47,7 @@ export def os []: nothing -> table<name: string, sudogroup: string, used: bool> 
     ]
 }
 
-# get OS info
+# get the detected OS as a single record, errors on unsupported OS
 export def used-os []: nothing -> record<name: string, sudogroup: string, used: bool, ID: string> {
     let candidates = (os | where used)
     if ($candidates | is-empty) {
@@ -61,7 +62,10 @@ export def used-os []: nothing -> record<name: string, sudogroup: string, used: 
     return ($candidates | first | insert ID (os-info | get ID))
 }
 
-# create user(s)
+# create user(s); users that already exist are skipped.
+# On Linux a random one-time password is set (printed to /dev/tty,
+# expired immediately so the user must change it at first login).
+# On FreeBSD users are created bare (as root, no password handling).
 export def newusers [...users: string]: nothing -> nothing {
     if ($users | is-empty) { return }
     let nupath = (which nu | get --optional path.0)
@@ -115,7 +119,8 @@ export def newusers [...users: string]: nothing -> nothing {
     }
 }
 
-# add user(s) to group(s)
+# add user(s) to group(s); a group is created if it doesn't exist.
+# Linux uses sudo + groupadd/usermod, FreeBSD uses pw (requires root).
 export def abgroupmod [
     users: list<string> # list of users to add to groups
     ...groups: string   # list of groups

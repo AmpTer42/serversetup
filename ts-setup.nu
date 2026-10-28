@@ -1,4 +1,7 @@
 #!/usr/bin/env nu
+# ts-setup.nu - install Tailscale, enable tailscaled
+# and authenticate the node with an auth key.
+
 use modules/pkg.nu [detect-pm ensure-installed]
 use modules/system.nu [sudocheck nsudo start-services]
 use modules/users.nu [used-os os-info]
@@ -12,18 +15,22 @@ let pmc = detect-pm
 def ts-repo [os: string]: nothing -> nothing {
     try {
         match $os {
+            # tailscale is in the main repos, nothing to add
             "Arch" => {
                 # Do nothing
             }
+            # openSUSE: use the OBS network:vpn repo matching the release
             "OpenSUSE" => {
                 if ($os_id == opensuse-tumbleweed) {
                     sudo -n zypper addrepo obs://network:vpn/openSUSE_Factory network:vpn-factory
                 } else {
+                    # replace spaces in the version with underscores for the OBS URL
                     let ver = (os-info | get VERSION_ID | str replace --all _ ' ')
                     let repo_url = ($"obs://network:vpn/($ver | str replace --all ' ' _)")
                     sudo -n zypper addrepo $repo_url network:vpn
                 }
             }
+            # Ubuntu/Debian: download the Tailscale keyring and source list
             "Ubuntu" => {
                 let codename = (lsb_release -cs)
                 let key_url = $"https://pkgs.tailscale.com/stable/ubuntu/($codename).noarmor.gpg"
@@ -38,6 +45,7 @@ def ts-repo [os: string]: nothing -> nothing {
                 http get --raw $key_url | nsudo --sudo-flags [-n] 'save --raw /usr/share/keyrings/tailscale-archive-keyring.gpg'
                 http get --raw $url | nsudo --sudo-flags [-n] 'save --raw /etc/apt/sources.list.d/tailscale.list'
             }
+            # RHEL: the repo URL needs the major version only (e.g. 9 from 9.4)
             "RHEL" => {
                 let version_id = (os-info | get VERSION_ID)
                 let ind = (($version_id | str index-of .) - 1)
@@ -71,6 +79,7 @@ def main [
     ts-repo $os_name
     ensure-installed $pmc tailscale
     start-services tailscaled
+    # bring the node up with the given auth key
     try {
         sudo -n tailscale up --auth-key $key
     } catch {|e|

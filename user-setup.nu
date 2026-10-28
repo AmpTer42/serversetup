@@ -1,4 +1,7 @@
 #!/usr/bin/env nu
+# user-setup.nu - create users with a one-time password
+# and add them to the OS sudo/wheel group.
+
 use modules/system.nu [is-root os-info sudocheck]
 use modules/users.nu [newusers abgroupmod used-os os]
 
@@ -8,6 +11,7 @@ let used_os = used-os
 def addtosudo [...users: string]: nothing -> nothing {
     if ($users | is-empty) { return }
     let groupadd = (os | where used | get --optional sudogroup)
+    # find users that are already members of the sudo group
     let sudoers = (sys users | where name in $users | where ($it.groups | any {|g| $g == $groupadd}) | get name)
     let missing = ($users | where $it not-in $sudoers)
     if ($missing | is-empty) { return }

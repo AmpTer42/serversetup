@@ -39,7 +39,9 @@ export def os-info []: nothing -> record {
     }
 }
 
-# Run a command or closure in an elevated shell
+# Run a command or closure in an elevated shell.
+# Pipeline input is serialized and piped to the root Nu process via stdin,
+# so the elevated command can consume it (e.g. 'save /path' from a pipe).
 export def nsudo [
     command?: string,                      # Command to execute
     --closure (-c) : closure,                # Closure to execute if not command is given
@@ -64,7 +66,7 @@ export def nsudo [
     }
 }
 
-# check services status
+# check services status via systemctl is-active
 export def check-services [...services: string]: nothing -> table<name: string, status: string> {
     if ($services | is-empty) {
         return []
@@ -83,7 +85,7 @@ export def check-services [...services: string]: nothing -> table<name: string, 
     }
 }
 
-# start services from input
+# start (enable --now) services that aren't active yet
 export def start-services [...services: string]: nothing -> nothing {
     if ($services | is-empty) {
         return
@@ -106,7 +108,7 @@ export def start-services [...services: string]: nothing -> nothing {
     }
 }
 
-# stop services from input
+# stop (disable --now) services that are currently active
 export def stop-services [...services: string]: nothing -> nothing {
     if ($services | is-empty) {
         return
@@ -129,7 +131,7 @@ export def stop-services [...services: string]: nothing -> nothing {
     }
 }
 
-# restart services from input
+# restart active services
 export def restart-services [...services: string]: nothing -> nothing {
     if ($services | is-empty) {
         return

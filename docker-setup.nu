@@ -1,4 +1,7 @@
 #!/usr/bin/env nu
+# docker-setup.nu - install Docker Engine with plugins,
+# enable the service and add users to the docker group.
+
 use modules/pkg.nu [ensure-installed detect-pm]
 use modules/system.nu [nsudo start-services os-info sudocheck]
 use modules/users.nu [abgroupmod used-os]
@@ -29,6 +32,7 @@ let pmc = detect-pm
 def docker-repo [os: string]: nothing -> nothing {
     try {
         match $os {
+            # openSUSE/SLES: add the Docker CE repo if it's missing
             "OpenSUSE" => {
                 let url = https://download.docker.com/linux/sles/docker-ce.repo
                 let currentrepos = (zypper --xmlout lr -u =~ $url)
@@ -38,6 +42,7 @@ def docker-repo [os: string]: nothing -> nothing {
                 }
                 return
             }
+            # Debian/Ubuntu: write a deb822 source signed by the Docker keyring
             "Debian" => {
                 let url = https://download.docker.com/linux/debian
                 let keyrings = "/etc/apt/keyrings"
@@ -79,6 +84,7 @@ def docker-repo [os: string]: nothing -> nothing {
                 return
             }
             "RHEL" => {
+                # RHEL needs dnf-plugins-core for config-manager
                 ensure-installed $pmc dnf-plugins-core
                 sudo -n dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
                 return
@@ -105,6 +111,7 @@ def main [
 ]: nothing -> nothing {
     sudocheck
     docker-repo $used_os.name
+    # Arch ships Docker in its own extra repo, others use the Docker CE repo
     if ($used_os.name != Arch) {
         ensure-installed $pmc ...$docker_std
    } else {

@@ -1,7 +1,9 @@
 # pkg.nu - generic package-manager helpers.
-# Supports: apt (apt-get), dnf, pacman, zypper, snap.
+# Supports: apt (apt-get), dnf, pacman, zypper, snap, pkg (FreeBSD).
+# All external commands run non-interactively so scripts never block on prompts.
 
-# Package managers table
+# Package managers table: each entry is probed via `which` to see if it's usable
+# on the current host.
 def pm-table []: nothing -> table<name: string, cmd: string, used: bool> {
     [
         {
@@ -37,7 +39,7 @@ def pm-table []: nothing -> table<name: string, cmd: string, used: bool> {
     ]
 }
 
-# Select available package managers
+# Select all available package managers (several can coexist, e.g. apt + snap on Ubuntu)
 export def detect-pm []: nothing -> list<string> {
     let found = (pm-table | where used | get name)
     if ($found | is-empty) {
@@ -52,7 +54,8 @@ export def detect-pm []: nothing -> list<string> {
     return $found
 }
 
-# Check if the package is already installed
+# Check if the package is already installed.
+# apt needs the dpkg Status string check; snap/pkg use their own query commands.
 def pkg-installed [pmc: string, pkg: string]: nothing -> bool {
     match $pmc {
         "apt" => {
@@ -76,7 +79,9 @@ def pkg-installed [pmc: string, pkg: string]: nothing -> bool {
     }
 }
 
-# Install one package
+# Install one package.
+# apt flags: quiet, no recommends, lock timeout and keep-old-conf
+# to survive unattended runs on busy or previously configured hosts.
 def pkg-install [pmc: string, pkg: string]: nothing -> nothing {
     try {
         match $pmc {
@@ -92,6 +97,8 @@ def pkg-install [pmc: string, pkg: string]: nothing -> nothing {
             "zypper" => {
                 sudo -n zypper install --non-interactive --gpg-auto-import-keys -y --auto-agree-with-licenses --download-in-advance $pkg
             }
+            # snap: retry with --classic only when the package requires it,
+            # otherwise re-raise the original failure
             "snap" => {
                 try {
                     sudo -n snap install $pkg
@@ -124,7 +131,7 @@ def pkg-install [pmc: string, pkg: string]: nothing -> nothing {
     }
 }
 
-# refresh packages index
+# refresh the package index of one package manager (pacman: -Sy only, no upgrade)
 export def refresh-pkgs [pmc: string]: nothing -> nothing {
     try {
         match $pmc {
@@ -158,7 +165,8 @@ export def refresh-pkgs [pmc: string]: nothing -> nothing {
     }
 }
 
-# install packages with available package managers if they aren't already installed
+# install packages with every given package manager if they aren't already installed;
+# each PM refreshes its index first, existing packages are skipped
 export def ensure-installed [pmc: list<string>, ...pkg: string]: nothing -> nothing {
     for i in $pmc {
         refresh-pkgs $i
