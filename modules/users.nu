@@ -65,10 +65,12 @@ export def used-os []: nothing -> record<name: string, sudogroup: string, used: 
 export def newusers [...users: string]: nothing -> nothing {
     if ($users | is-empty) { return }
     let nupath = (which nu | get --optional path.0)
+    let existing = (sys users | get name)
     if ((used-os | get --optional name) != FreeBSD) {
         # Linux/Unix: create user, set one-time password,
         # print it to /dev/tty.
-        for user in ($users | sort) {
+        for user in $users {
+            if ($user in $existing) { continue }
             try {
                 sudo -n useradd -m --shell $nupath -U $user
                 let passwd = (openssl rand -base64 32)
@@ -89,6 +91,7 @@ export def newusers [...users: string]: nothing -> nothing {
     } else if (is-root) {
         # FreeBSD: create user without working with password.
         for user in ($users | sort) {
+            if ($user in $existing) { continue }
             try {
                 pw useradd -n $user -m -s $nupath
             } catch {|e|
