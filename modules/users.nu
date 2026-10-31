@@ -166,6 +166,34 @@ export def delusers [
     }
 }
 
+# function-helper for abgroupmod
+def apply-group [ctx: record<freebsd: bool, action: string, u: string, g: string>]: nothing -> nothing {
+    let freebsd = ($ctx | get freebsd)
+    let action = ($ctx | get action)
+    let u = ($ctx | get u)
+    let g = ($ctx | get g)
+    if $freebsd {
+        if $action == add {
+            pw groupmod $g -m $u
+        } else {
+            pw groupmod $g -d $u
+        }
+        return
+    }
+    try {
+        sudo -n groupadd --force $g
+        sudo -n gpasswd --($action) $u $g
+    } catch {|e|
+        error make {
+            msg: $"can't add ($u) to group ($g)"
+            label: {
+                text: $"failed with error code: ($e | get --optional exit_code | default unknown)"
+                span: (metadata $e.debug).span
+            }
+        }
+    }
+}
+
 # add (or delete) user(s) to group(s); a group is created if it doesn't exist.
 # Linux uses sudo + groupadd/gpasswd, FreeBSD uses pw (requires root).
 export def abgroupmod [
@@ -174,7 +202,15 @@ export def abgroupmod [
     --action(-a): string = add # action to do with user's groups. Must be add or delete. Works only on Linux.
 ]: nothing -> nothing {
     if (($users | is-empty) or ($groups | is-empty)) { return }
-    if (($action != add) or ($action != delete)) { return }
+    if ($action not-in [add delete]) {
+        error make {
+            msg: "--action must be add or delete"
+            label: {
+                text: $"($action) is not add or delete"
+                span: (metadata $action).span
+            }
+        }
+    }
     let userdata = (sys users | sort-by id | where name != nobody | where id >= 1000)
     let freebsd = ((used-os | get --optional name) == FreeBSD)
     if ($freebsd and not (is-root)) {
@@ -199,24 +235,10 @@ export def abgroupmod [
         }
         let ug = ($matches | get groups | flatten)
         for g in $groups {
-            if ($g not-in $ug) {
-                if $freebsd {
-                    pw groupmod $g -m $u
-                } else {
-                    try {
-                        sudo -n groupadd --force $g
-                        sudo -n gpasswd --($action) $u $g
-                    } catch {|e|
-                        error make {
-                            msg: $"can't add ($u) to group ($g)"
-                            label: {
-                                text: $"failed with error code: ($e | get --optional exit_code | default unknown)"
-                                span: (metadata $e.debug).span
-                            }
-                        }
-                    }
-                }
-            }
+            if (($g in $ug) and ($action == add)) { continue }
+            if (($g not-in $ug) and ($action == delete)) { continue }
+            let ct = {freebsd: $freebsd, action: $action, u: $u, g: $g}
+            apply-group $ct
         }
     }
 }
