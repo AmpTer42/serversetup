@@ -166,13 +166,15 @@ export def delusers [
     }
 }
 
-# add user(s) to group(s); a group is created if it doesn't exist.
-# Linux uses sudo + groupadd/usermod, FreeBSD uses pw (requires root).
+# add (or delete) user(s) to group(s); a group is created if it doesn't exist.
+# Linux uses sudo + groupadd/gpasswd, FreeBSD uses pw (requires root).
 export def abgroupmod [
     users: list<string> # list of users to add to groups
     ...groups: string   # list of groups
+    --action(-a): string = add
 ]: nothing -> nothing {
     if (($users | is-empty) or ($groups | is-empty)) { return }
+    if (($action != add) or ($action != delete)) { return }
     let userdata = (sys users | sort-by id | where name != nobody | where id >= 1000)
     let freebsd = ((used-os | get --optional name) == FreeBSD)
     if ($freebsd and not (is-root)) {
@@ -203,7 +205,7 @@ export def abgroupmod [
                 } else {
                     try {
                         sudo -n groupadd --force $g
-                        sudo -n usermod --append --groups $g $u
+                        sudo -n gpasswd --($action) $u $g
                     } catch {|e|
                         error make {
                             msg: $"can't add ($u) to group ($g)"
