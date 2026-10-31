@@ -119,6 +119,53 @@ export def newusers [...users: string]: nothing -> nothing {
     }
 }
 
+# delete list of users
+export def delusers [
+    ...users: string # users to delete
+]: nothing -> nothing {
+    if ($users | is-empty) { return }
+    let existing = (sys users | get name)
+    if ((used-os | get --optional name) != FreeBSD) {
+        for $user in $users {
+            if ($user not-in $existing) { continue }
+            try {
+                sudo -n userdel --remove $user
+            } catch {|e|
+                error make {
+                    msg: $"can't del user ($user): error code ($e | get --optional exit_code | default unknown)"
+                    label: {
+                        text: $"can't delete user ($user)"
+                        span: (metadata $e.debug).span
+                    }
+                }
+            }
+        }
+    } else if (is-root) {
+        for $user in $users {
+            if ($user not-in $existing) { continue }
+            try {
+                pw userdel -r $user
+            } catch {|e|
+                error make {
+                    msg: $"can't del user ($user): error code ($e | get --optional exit_code | default unknown)"
+                    label: {
+                        text: $"can't delete user ($user)"
+                        span: (metadata $e.debug).span
+                    }
+                }
+            }
+        }
+    } else {
+        error make {
+            msg: "login as root and execute this script again"
+            label: {
+                text: $"can't create users without root permissions"
+                span: (metadata $users).span
+            }
+        }
+    }
+}
+
 # add user(s) to group(s); a group is created if it doesn't exist.
 # Linux uses sudo + groupadd/usermod, FreeBSD uses pw (requires root).
 export def abgroupmod [
