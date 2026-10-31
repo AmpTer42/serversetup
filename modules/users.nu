@@ -171,7 +171,7 @@ export def delusers [
 export def abgroupmod [
     users: list<string> # list of users to add to groups
     ...groups: string   # list of groups
-    --action(-a): string = add
+    --action(-a): string = add # action to do with user's groups. Must be add or delete. Works only on Linux.
 ]: nothing -> nothing {
     if (($users | is-empty) or ($groups | is-empty)) { return }
     if (($action != add) or ($action != delete)) { return }
