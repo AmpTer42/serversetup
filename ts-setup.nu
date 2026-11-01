@@ -12,7 +12,9 @@ let os_id = ($used_os | get ID)
 let pmc = detect-pm
 
 # add Tailscale repo to OS repos
-def ts-repo [os: string]: nothing -> nothing {
+def ts-repo [
+    os: string
+]: nothing -> nothing {
     try {
         match $os {
             # tailscale is in the main repos, nothing to add
@@ -74,6 +76,7 @@ def ts-repo [os: string]: nothing -> nothing {
 # This script setups Tailscale on host
 def main [
     key: string # the key to set up tailscale ($env.TS_AUTHKEY as you can say)
+    --login-server: string = "https://controlplane.tailscale.com" # login server to use
 ]: nothing -> nothing {
     sudocheck
     ts-repo $os_name
@@ -81,7 +84,7 @@ def main [
     start-services tailscaled
     # bring the node up with the given auth key
     try {
-        sudo -n tailscale up --auth-key $key
+        sudo -n tailscale up --auth-key $key --login-server $login_server
     } catch {|e|
         error make {
             msg: $"can't set up tailscale with ($key)"
