@@ -4,8 +4,13 @@
 use modules/system.nu [is-root sudocheck doascheck nsudo ndoas]
 
 # Install chroot directories
-def chroot_inst [chroot_dir: string, method: string]: nothing -> nothing {
-    let dirs = ["($chroot_dir)" "($chroot_dir)/etc/unbound" "($chroot_dir)/var/lib/unbound" "($chroot_dir)/var/log"]
+def chroot-inst [chroot_dir: string, method: string]: nothing -> nothing {
+    let dirs = [
+    ($chroot_dir)
+    $"($chroot_dir)/etc/unbound"
+    $"($chroot_dir)/var/lib/unbound"
+    $"($chroot_dir)/var/log"
+    ]
     try {
         match $method {
             "sudo" => {
@@ -39,7 +44,7 @@ def chroot_inst [chroot_dir: string, method: string]: nothing -> nothing {
 }
 
 # Install root.hints in chroot
-def root_hints [chroot_dir: string, method: string]: nothing -> nothing {
+def root-hints [chroot_dir: string, method: string]: nothing -> nothing {
     try {
         match $method {
             "sudo" => {
@@ -64,7 +69,7 @@ def root_hints [chroot_dir: string, method: string]: nothing -> nothing {
 }
 
 # Install root.key in chroot
-def anchor_key [chroot_dir: string, method: string]: nothing -> nothing {
+def anchor-key [chroot_dir: string, method: string]: nothing -> nothing {
     let root_key = $"($chroot_dir)/var/lib/unbound/root.key" # path to root.key
     try {
         match $method {
@@ -94,9 +99,9 @@ def anchor_key [chroot_dir: string, method: string]: nothing -> nothing {
 
 # Checks what methods to gain root privileges could be used
 def method []: nothing -> string {
-    if (which sudo | is-not-empty) { sudocheck; return "sudo" # sudo has the highest priority
-    } else if (which doas | is-not-empty) { doascheck; return "doas" # doas has second priority
-    } else if (is-root) { return 'root' # root user has least priority
+    if (which sudo | is-not-empty) { sudocheck; return sudo # sudo has the highest priority
+    } else if (which doas | is-not-empty) { doascheck; return doas # doas has second priority
+    } else if (is-root) { return root # root user has least priority
     } else { error make "No sudo, doas or root privileges were found, aborting" }
 }
 
@@ -109,12 +114,12 @@ def main [
 ]: nothing -> nothing {
     let method = (method)
     if (not $no_chroot) {
-        chroot_inst $chroot_dir $method
+        chroot-inst $chroot_dir $method
     }
     if (not $no_hints) {
-        root_hints $chroot_dir $method
+        root-hints $chroot_dir $method
     }
     if (not $no_anchor) {
-        anchor_key $chroot_dir $method
+        anchor-key $chroot_dir $method
     }
 }
