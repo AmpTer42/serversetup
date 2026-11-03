@@ -18,7 +18,7 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v2
 
       - name: Install nu-lint
-        run: cargo install nu-lint --locked
+        run: cargo +stable install nu-lint
 
       - name: Run nu-lint
         run: nu-lint --format compact --config .nu-lint.toml . > lint.txt
