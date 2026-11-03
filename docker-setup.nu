@@ -1,6 +1,4 @@
 #!/usr/bin/env nu
-# docker-setup.nu - install Docker Engine with plugins,
-# enable the service and add users to the docker group.
 
 use modules/pkg.nu [ensure-installed detect-pm]
 use modules/system.nu [nsudo start-services os-info sudocheck]
@@ -105,7 +103,8 @@ def docker-repo [os: string]: nothing -> nothing {
     }
 }
 
-# the full instruction to install docker and plugins
+# docker-setup.nu - install Docker Engine repo, Docker Engine with plugins,
+# enable the service and add users to the docker group.
 def main [
     ...users: string # usernames to add to the docker group
 ]: nothing -> nothing {

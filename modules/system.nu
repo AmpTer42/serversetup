@@ -23,6 +23,21 @@ export def sudocheck []: nothing -> nothing {
     }
 }
 
+# Check if doas is present without pasword in this environment
+export def doascheck []: nothing -> nothing {
+    try {
+        doas -nu root true
+    } catch {|e|
+        error make {
+            msg: $"can't use doas with no password: ($e.msg)"
+            label: {
+                text: "doas failed"
+                span: (metadata $e.debug).span
+            }
+        }
+    }
+}
+
 # Parse /etc/os-release (values are unquoted)
 export def os-info []: nothing -> record {
     try {
@@ -39,7 +54,7 @@ export def os-info []: nothing -> record {
     }
 }
 
-# Run a command or closure in an elevated shell.
+# Run a command or closure in an elevated shell via sudo.
 # Pipeline input is serialized and piped to the root Nu process via stdin,
 # so the elevated command can consume it (e.g. 'save /path' from a pipe).
 export def nsudo [
@@ -60,6 +75,33 @@ export def nsudo [
             msg: "can't execute nsudo with given command"
             label: {
                 text: $"see script"
+                span: (metadata $command).span
+            }
+        }
+    }
+}
+
+# Run a command or closure in an elevated shell via doas.
+# Pipeline input is serialized and piped to the root Nu process via stdin,
+# so the elevated command can consume it (e.g. 'save /path' from a pipe).
+export def ndoas [
+    command?: string,                      # Command to execute
+    --closure (-c): closure,               # Closure to execute if no command is given
+    --doas-flags (-s): list<string> = [],  # Flags to pass to doas
+]: any -> string {
+    let nu_path = (which nu).0?.path
+    try {
+        let script = (
+            if $command != null { $command }
+            else if $closure != null { $'from nuon | do ($closure | to nuon --serialize | from nuon)' }
+            else { error make "a command or closure must be provided" }
+        )
+        $in | to nuon | doas ...$doas_flags $nu_path --stdin --commands $script
+    } catch {|e|
+        error make {
+            msg: "can't execute ndoas with given command"
+            label: {
+                text: "see script"
                 span: (metadata $command).span
             }
         }
