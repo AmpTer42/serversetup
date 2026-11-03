@@ -1,6 +1,4 @@
 #!/usr/bin/env nu
-# ctk-setup.nu - install the NVIDIA Container Toolkit,
-# generate the CDI spec and configure the Docker runtime for GPU support.
 
 use modules/pkg.nu [ensure-installed detect-pm]
 use modules/system.nu [nsudo sudocheck]
@@ -145,7 +143,8 @@ def ctk-config []: nothing -> nothing {
     }
 }
 
-# whole instruction
+# ctk-setup.nu - install the NVIDIA Container Toolkit,
+# generate the CDI spec and configure the Docker runtime for GPU support.
 def main []: nothing -> nothing {
     sudocheck
     let packages = [ca-certificates]

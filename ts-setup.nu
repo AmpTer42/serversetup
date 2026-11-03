@@ -1,6 +1,4 @@
 #!/usr/bin/env nu
-# ts-setup.nu - install Tailscale, enable tailscaled
-# and authenticate the node with an auth key.
 
 use modules/pkg.nu [detect-pm ensure-installed]
 use modules/system.nu [sudocheck nsudo start-services]
@@ -73,7 +71,8 @@ def ts-repo [
     }
 }
 
-# This script setups Tailscale on host
+# ts-setup.nu - install Tailscale repo, Tailscale, enable tailscaled service
+# and authenticate the node with an auth key.
 def main [
     key: string # the key to set up tailscale ($env.TS_AUTHKEY as you can say)
     --login-server: string = "https://controlplane.tailscale.com" # login server to use
